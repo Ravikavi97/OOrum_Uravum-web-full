@@ -1,0 +1,79 @@
+services:
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: tamil_news
+      MARIADB_USER: tamil_user
+      MARIADB_PASSWORD: tamil_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:3000,http://localhost:3001,http://172.20.10.7:3000,http://172.20.10.7:3001
+      DATABASE_URL: mysql://tamil_user:tamil_pass@mariadb:3306/tamil_news
+      JWT_SECRET: docker-jwt-secret-change-in-production
+      JWT_REFRESH_SECRET: docker-refresh-secret-change-in-production
+      MEDIA_UPLOAD_PATH: /app/uploads
+      SITE_URL: http://localhost:3000
+      FRONTEND_REVALIDATE_URL: http://frontend:3000/api/revalidate
+      REVALIDATE_SECRET: revalidate-secret
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  frontend:
+    image: node:22-slim
+    working_dir: /app
+    command: node server.js
+    ports:
+      - "3000:3000"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      INTERNAL_API_URL: http://backend:4000/api
+      REVALIDATE_SECRET: revalidate-secret
+    volumes:
+      - ./frontend/.next/standalone/frontend:/app
+      - ./frontend/.next/static:/app/.next/static
+      - ./frontend/public:/app/public
+    depends_on:
+      - backend
+
+  publisher-dashboard:
+    image: node:22-slim
+    working_dir: /app
+    command: node server.js
+    ports:
+      - "3001:3000"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      INTERNAL_API_URL: http://backend:4000/api
+    volumes:
+      - ./publisher-dashboard/.next/standalone/publisher-dashboard:/app
+      - ./publisher-dashboard/.next/static:/app/.next/static
+      - ./publisher-dashboard/public:/app/public
+    depends_on:
+      - backend
+
+volumes:
+  mariadb_data:
+  uploads_data:

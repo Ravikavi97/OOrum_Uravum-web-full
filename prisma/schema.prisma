@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  EDITOR
+  AUTHOR
+}
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum CommentStatus {
+  PENDING
+  APPROVED
+  FLAGGED
+  REJECTED
+}
+
+// ─── User ────────────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid()) @db.VarChar(30)
+  email        String    @unique @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  name         String    @db.VarChar(255)
+  slug         String    @unique @db.VarChar(255)
+  role         Role      @default(AUTHOR)
+  bio          String?   @db.Text
+  profileImage String?   @map("profile_image") @db.VarChar(500)
+  socialLinks  Json?     @map("social_links")
+  failedLogins Int       @default(0) @map("failed_logins")
+  lockedUntil  DateTime? @map("locked_until")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  articles Article[]
+
+  @@map("users")
+}
+
+// ─── Article ─────────────────────────────────────────────────────────────────
+
+model Article {
+  id            String        @id @default(cuid()) @db.VarChar(30)
+  title         String        @db.VarChar(500)
+  slug          String        @unique @db.VarChar(500)
+  content       String        @db.Text
+  excerpt       String?       @db.Text
+  status        ArticleStatus @default(DRAFT)
+  isBreaking    Boolean       @default(false) @map("is_breaking")
+  featuredImage String?       @map("featured_image") @db.VarChar(500)
+  sourceUrl     String?       @unique @map("source_url") @db.VarChar(2048)
+  publishedAt   DateTime?     @map("published_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  authorId   String   @map("author_id") @db.VarChar(30)
+  author     User     @relation(fields: [authorId], references: [id])
+  categoryId String   @map("category_id") @db.VarChar(30)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  tags     ArticleTag[]
+  comments Comment[]
+  media    Media[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([authorId])
+  @@index([categoryId])
+  @@map("articles")
+}
+
+// ─── Category ────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String     @id @default(cuid()) @db.VarChar(30)
+  name        String     @db.VarChar(255)
+  slug        String     @unique @db.VarChar(255)
+  description String?    @db.Text
+  parentId    String?    @map("parent_id") @db.VarChar(30)
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  articles Article[]
+
+  @@map("categories")
+}
+
+// ─── Tag ─────────────────────────────────────────────────────────────────────
+
+model Tag {
+  id        String       @id @default(cuid()) @db.VarChar(30)
+  name      String       @db.VarChar(255)
+  slug      String       @unique @db.VarChar(255)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  articles ArticleTag[]
+
+  @@map("tags")
+}
+
+// ─── ArticleTag (junction) ───────────────────────────────────────────────────
+
+model ArticleTag {
+  articleId String  @map("article_id") @db.VarChar(30)
+  tagId     String  @map("tag_id") @db.VarChar(30)
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@map("article_tags")
+}
+
+// ─── Comment ─────────────────────────────────────────────────────────────────
+
+model Comment {
+  id          String        @id @default(cuid()) @db.VarChar(30)
+  displayName String        @map("display_name") @db.VarChar(255)
+  email       String        @db.VarChar(255)
+  content     String        @db.Text
+  status      CommentStatus @default(PENDING)
+  articleId   String        @map("article_id") @db.VarChar(30)
+  article     Article       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@index([articleId, status])
+  @@map("comments")
+}
+
+// ─── Media ───────────────────────────────────────────────────────────────────
+
+model Media {
+  id           String   @id @default(cuid()) @db.VarChar(30)
+  filename     String   @db.VarChar(500)
+  originalUrl  String   @map("original_url") @db.VarChar(2048)
+  thumbnailUrl String?  @map("thumbnail_url") @db.VarChar(2048)
+  mediumUrl    String?  @map("medium_url") @db.VarChar(2048)
+  largeUrl     String?  @map("large_url") @db.VarChar(2048)
+  mimeType     String   @map("mime_type") @db.VarChar(100)
+  size         Int
+  imageData    Bytes?   @map("image_data") @db.LongBlob
+  articleId    String?  @map("article_id") @db.VarChar(30)
+  article      Article? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("media")
+}
+
+// ─── SiteSetting ─────────────────────────────────────────────────────────────
+
+model SiteSetting {
+  id        String   @id @default(cuid()) @db.VarChar(30)
+  key       String   @unique @db.VarChar(255)
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}
+
+
+// ─── IngestionLog ────────────────────────────────────────────────────────────
+
+model IngestionLog {
+  id        String   @id @default(cuid()) @db.VarChar(30)
+  sourceUrl String   @map("source_url") @db.VarChar(2048)
+  status    String   @db.VarChar(50)
+  message   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("ingestion_logs")
+}
+
+// ─── Obituary ────────────────────────────────────────────────────────────────
+
+model Obituary {
+  id          String   @id @default(cuid()) @db.VarChar(30)
+  name        String   @db.VarChar(500)
+  content     String   @db.Text
+  sourceUrl   String?  @unique @map("source_url") @db.VarChar(2048)
+  imageData   Bytes?   @map("image_data") @db.LongBlob
+  publishedAt DateTime @default(now()) @map("published_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("obituaries")
+}
+
+// ─── Visitor Tracking ────────────────────────────────────────────────────────
+
+model VisitorSession {
+  id        String   @id @default(cuid()) @db.VarChar(30)
+  sessionId String   @unique @map("session_id") @db.VarChar(64)
+  ip        String?  @db.VarChar(45)
+  userAgent String?  @map("user_agent") @db.VarChar(500)
+  lastSeen  DateTime @default(now()) @map("last_seen")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([lastSeen])
+  @@index([createdAt])
+  @@map("visitor_sessions")
+}
+
+model VisitorCount {
+  id    String @id @default(cuid()) @db.VarChar(30)
+  date  DateTime @unique @db.Date
+  count Int    @default(0)
+
+  @@map("visitor_counts")
+}
+
+model VisitorTotal {
+  id    String @id @db.VarChar(30)
+  total Int    @default(0)
+
+  @@map("visitor_total")
+}
+
+// ─── Advertisement ───────────────────────────────────────────────────────────
+
+model Advertisement {
+  id          String   @id @default(cuid()) @db.VarChar(30)
+  title       String   @db.VarChar(500)
+  description String?  @db.Text
+  imageUrl    String?  @map("image_url") @db.VarChar(2048)
+  linkUrl     String?  @map("link_url") @db.VarChar(2048)
+  position    String   @default("sidebar") @db.VarChar(50) // sidebar, banner
+  active      Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([active, position])
+  @@map("advertisements")
+}

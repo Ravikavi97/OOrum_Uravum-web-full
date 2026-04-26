@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+backend/dist/
+frontend/.next/
+publisher-dashboard/.next/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.production
+frontend/.env
+publisher-dashboard/.env
+
+# Docker volumes
+uploads/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+
+# Misc
+*.tgz

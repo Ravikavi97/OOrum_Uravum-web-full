@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <circle cx="16" cy="16" r="15" fill="#cc0000" stroke="#8b0000" stroke-width="1"/>
+  <circle cx="16" cy="16" r="12" fill="#ffd700"/>
+  <circle cx="16" cy="16" r="8" fill="#2a2a00" opacity="0.7"/>
+  <circle cx="16" cy="16" r="4" fill="#cc6600"/>
+  <text x="16" y="20" text-anchor="middle" font-size="6" font-weight="bold" fill="white" font-family="sans-serif">ஊ</text>
+</svg>

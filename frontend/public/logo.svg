@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="70%" style="stop-color:#cc8800"/>
+      <stop offset="100%" style="stop-color:#8b0000"/>
+    </radialGradient>
+    <linearGradient id="ribbon" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#8b0000"/>
+      <stop offset="50%" style="stop-color:#cc0000"/>
+      <stop offset="100%" style="stop-color:#8b0000"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer red circle -->
+  <circle cx="100" cy="90" r="88" fill="#cc0000" stroke="#8b0000" stroke-width="3"/>
+  <!-- Inner gold circle -->
+  <circle cx="100" cy="90" r="75" fill="url(#bg)"/>
+  <!-- Inner dark circle -->
+  <circle cx="100" cy="90" r="55" fill="#2a2a00" opacity="0.7"/>
+  <!-- Globe icon -->
+  <circle cx="100" cy="90" r="25" fill="#cc6600" stroke="#aa5500" stroke-width="1.5"/>
+  <ellipse cx="100" cy="90" rx="12" ry="25" fill="none" stroke="#884400" stroke-width="1"/>
+  <line x1="75" y1="90" x2="125" y2="90" stroke="#884400" stroke-width="1"/>
+  <line x1="100" y1="65" x2="100" y2="115" stroke="#884400" stroke-width="1"/>
+  <!-- People figures around globe -->
+  <circle cx="75" cy="75" r="6" fill="#ff6600" opacity="0.9"/>
+  <circle cx="125" cy="75" r="6" fill="#cc3300" opacity="0.9"/>
+  <circle cx="100" cy="55" r="6" fill="#eeeecc" opacity="0.9"/>
+  <circle cx="80" cy="110" r="6" fill="#ff9900" opacity="0.9"/>
+  <circle cx="120" cy="110" r="6" fill="#cc6600" opacity="0.9"/>
+  <!-- Top Tamil text: ஊரும் உறவும் -->
+  <text x="100" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="white" font-family="sans-serif">ஊரும் உறவும்</text>
+  <!-- Ribbon at bottom -->
+  <rect x="15" y="160" width="170" height="30" rx="5" fill="url(#ribbon)"/>
+  <!-- Ribbon text -->
+  <text x="100" y="180" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffd700" font-family="sans-serif">ஒன்றுபட்டால் உண்டு வாழ்வு</text>
+</svg>

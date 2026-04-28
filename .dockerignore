@@ -1,0 +1,8 @@
+node_modules
+.next
+dist
+.kiro
+.vscode
+*.md
+.git
+.gitignore

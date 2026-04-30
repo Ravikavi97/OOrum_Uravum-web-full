@@ -6,6 +6,7 @@ import { ApiRequestError } from "@/services/api";
 import JsonLd from "@/components/seo/JsonLd";
 import CommentsSection from "@/components/article/CommentsSection";
 import { ArticleImage } from "@/components/article/ArticleCard";
+import ShareButtons from "@/components/ui/ShareButtons";
 
 export const revalidate = 60;
 
@@ -134,6 +135,15 @@ export default async function ArticleDetailPage({
         className="prose prose-lg mt-8 max-w-none"
         dangerouslySetInnerHTML={{ __html: article.content }}
       />
+
+      {/* Share buttons */}
+      <div className="mt-8 pt-6 border-t border-gray-200">
+        <ShareButtons
+          url={`${SITE_URL}/news/${article.slug}`}
+          title={article.title}
+          description={article.excerpt || undefined}
+        />
+      </div>
 
       {/* Comments section */}
       <CommentsSection articleId={article.id} />

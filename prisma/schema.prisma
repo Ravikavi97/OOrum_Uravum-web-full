@@ -188,6 +188,7 @@ model IngestionLog {
 model Obituary {
   id          String   @id @default(cuid()) @db.VarChar(30)
   name        String   @db.VarChar(500)
+  slug        String   @unique @db.VarChar(500)
   content     String   @db.Text
   sourceUrl   String?  @unique @map("source_url") @db.VarChar(2048)
   imageData   Bytes?   @map("image_data") @db.LongBlob
@@ -227,19 +228,55 @@ model VisitorTotal {
   @@map("visitor_total")
 }
 
+// ─── VideoPost ────────────────────────────────────────────────────────────
+
+model VideoPost {
+  id          String   @id @default(cuid()) @db.VarChar(30)
+  title       String   @db.VarChar(500)
+  slug        String   @unique @db.VarChar(500)
+  description String?  @db.Text
+  videoUrl    String   @map("video_url") @db.VarChar(2048)
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(2048)
+  platform    String   @default("youtube") @db.VarChar(50) // youtube, vimeo, dailymotion, other
+  active      Boolean  @default(true)
+  order       Int      @default(0)
+  categoryId  String?  @map("category_id") @db.VarChar(30)
+  category    VideoCat? @relation(fields: [categoryId], references: [id])
+  publishedAt DateTime @default(now()) @map("published_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([active, order])
+  @@map("video_posts")
+}
+
+// ─── Video Category ──────────────────────────────────────────────────────────
+
+model VideoCat {
+  id        String      @id @default(cuid()) @db.VarChar(30)
+  name      String      @db.VarChar(255)
+  slug      String      @unique @db.VarChar(255)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  videos    VideoPost[]
+
+  @@map("video_categories")
+}
+
 // ─── Advertisement ───────────────────────────────────────────────────────────
 
 model Advertisement {
-  id          String   @id @default(cuid()) @db.VarChar(30)
-  title       String   @db.VarChar(500)
-  description String?  @db.Text
-  imageUrl    String?  @map("image_url") @db.VarChar(2048)
-  linkUrl     String?  @map("link_url") @db.VarChar(2048)
-  position    String   @default("sidebar") @db.VarChar(50) // sidebar, banner
-  active      Boolean  @default(true)
-  order       Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(cuid()) @db.VarChar(30)
+  title        String   @db.VarChar(500)
+  description  String?  @db.Text
+  imageUrl     String?  @map("image_url") @db.VarChar(2048)
+  linkUrl      String?  @map("link_url") @db.VarChar(2048)
+  position     String   @default("sidebar") @db.VarChar(50) // sidebar, banner, header
+  cropPosition String?  @map("crop_position") @db.VarChar(50) // e.g. "50% 30%" for object-position
+  active       Boolean  @default(true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@index([active, position])
   @@map("advertisements")

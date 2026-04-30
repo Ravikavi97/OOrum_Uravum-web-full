@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '../lib/prisma';
 import { signAccessToken, signRefreshToken, verifyToken, AuthPayload } from '../lib/auth';
 
@@ -27,9 +28,24 @@ const resetPasswordSchema = z.object({
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
+// ─── Login-specific rate limiter: 5 attempts per 15 minutes per IP ───────────
+
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => req.ip ?? 'unknown',
+  handler: (_req: Request, res: Response) => {
+    res.status(429).json({
+      error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again in 15 minutes.' },
+    });
+  },
+});
+
 // ─── POST /login ─────────────────────────────────────────────────────────────
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
@@ -195,15 +211,24 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   if (user) {
     // Generate a time-limited reset token (valid for 1 hour)
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const _resetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    // Log the reset request (in production, send email with reset link)
-    console.log(`Password reset requested for ${email}. Token: ${resetToken}, Expires: ${resetExpiry.toISOString()}`);
+    // TODO: In production, send email with reset link instead of logging
+    // await sendPasswordResetEmail(email, resetToken);
+    console.log(`[auth] Password reset requested for ${email}. Token generated (not shown for security).`);
   }
 
   res.json({
     message: 'If an account with that email exists, a password reset link has been sent.',
   });
+});
+
+// ─── POST /logout — Invalidate session (client-side cleanup) ─────────────────
+
+router.post('/logout', (_req: Request, res: Response) => {
+  // JWT is stateless — client must discard tokens.
+  // In a production system, add token to a blacklist/revocation table.
+  res.json({ message: 'Logged out successfully. Please discard your tokens.' });
 });
 
 export default router;

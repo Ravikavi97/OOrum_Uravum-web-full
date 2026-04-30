@@ -19,7 +19,9 @@ import settingsRouter from './routes/settings';
 import obituariesRouter from './routes/obituaries';
 import visitorsRouter from './routes/visitors';
 import adsRouter from './routes/advertisements';
+import videosRouter from './routes/videos';
 import { publicRateLimiter } from './middleware/rateLimiter';
+import { setupSwagger } from './swagger';
 
 dotenv.config();
 
@@ -27,7 +29,21 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      frameSrc: ["'self'", "https://www.youtube.com", "https://player.vimeo.com", "https://www.dailymotion.com"],
+      connectSrc: ["'self'", "http:", "https:"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // CORS configuration
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
@@ -67,6 +83,10 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/obituaries', obituariesRouter);
 app.use('/api/visitors', visitorsRouter);
 app.use('/api/ads', adsRouter);
+app.use('/api/videos', videosRouter);
+
+// Swagger API docs
+setupSwagger(app);
 
 // Health check
 app.get('/api/health', (_req, res) => {

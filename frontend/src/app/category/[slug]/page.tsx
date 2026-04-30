@@ -61,7 +61,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       {obituaries.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {obituaries.map((o) => (
-            <Link key={o.id} href={`/obituary/${o.id}`} className="block rounded-2xl bg-card-bg shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+            <Link key={o.id} href={`/obituary/${o.slug}`} className="block rounded-2xl bg-card-bg shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
               <div className="aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-gray-300 to-gray-400">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img

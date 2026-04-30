@@ -57,6 +57,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Notify backend (fire-and-forget)
+    const t = localStorage.getItem('admin_token');
+    if (t) {
+      fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
+      }).catch(() => {});
+    }
     setToken(null);
     setUser(null);
     localStorage.removeItem('admin_token');

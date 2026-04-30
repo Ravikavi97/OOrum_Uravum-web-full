@@ -17,12 +17,13 @@ interface HomeLayoutConfig {
 
 const DEFAULT_SECTIONS: Section[] = [
   { id: 'ticker', label: 'Ticker', visible: true, order: 0 },
-  { id: 'hero', label: 'Hero Section', visible: true, order: 1 },
-  { id: 'topicCards', label: 'Topic Cards', visible: true, order: 2 },
-  { id: 'latestNews', label: 'Latest News', visible: true, order: 3 },
-  { id: 'obituary', label: 'Obituary Section', visible: true, order: 4 },
-  { id: 'adSidebar', label: 'Advertisement Sidebar', visible: true, order: 5 },
-  { id: 'archiveSidebar', label: 'Archive Sidebar', visible: true, order: 6 },
+  { id: 'videoHero', label: 'Video Hero Section', visible: true, order: 1 },
+  { id: 'hero', label: 'Text News Hero Section', visible: true, order: 2 },
+  { id: 'obituary', label: 'Obituary / Tributes', visible: true, order: 3 },
+  { id: 'topicCards', label: 'Topic Cards', visible: true, order: 4 },
+  { id: 'latestNews', label: 'Latest News', visible: true, order: 5 },
+  { id: 'adSidebar', label: 'Advertisement Sidebar', visible: true, order: 6 },
+  { id: 'archiveSidebar', label: 'Archive Sidebar', visible: true, order: 7 },
 ];
 
 export default function HomeLayoutPage() {
@@ -39,6 +40,12 @@ export default function HomeLayoutPage() {
   const [heroCat2, setHeroCat2] = useState('');
   const [infoRowTitle, setInfoRowTitle] = useState('தகவல் கண்ணோட்டம்');
 
+  // Video hero config state
+  const [videoCategories, setVideoCategories] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [videoCat1, setVideoCat1] = useState('');
+  const [videoCat2, setVideoCat2] = useState('');
+  const [videoInfoRowTitle, setVideoInfoRowTitle] = useState('அனைத்து வீடியோக்கள்');
+
   const fetchConfig = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -54,7 +61,10 @@ export default function HomeLayoutPage() {
         const parsed: HomeLayoutConfig = JSON.parse(entry.value);
         if (parsed.sections?.length) {
           const sorted = [...parsed.sections].sort((a, b) => a.order - b.order);
-          setSections(sorted);
+          // Merge any new default sections not yet in saved config
+          const savedIds = new Set(sorted.map((s) => s.id));
+          const missing = DEFAULT_SECTIONS.filter((d) => !savedIds.has(d.id)).map((d, i) => ({ ...d, order: sorted.length + i }));
+          setSections([...sorted, ...missing]);
         } else {
           setSections(DEFAULT_SECTIONS);
         }
@@ -73,9 +83,26 @@ export default function HomeLayoutPage() {
         } catch { /* ignore */ }
       }
 
+      // Load video hero config
+      const videoHeroEntry = Array.isArray(data) ? data.find((s) => s.key === 'videoHeroConfig') : null;
+      if (videoHeroEntry?.value) {
+        try {
+          const vc = JSON.parse(videoHeroEntry.value);
+          if (vc.categorySlugs?.[0]) setVideoCat1(vc.categorySlugs[0]);
+          if (vc.categorySlugs?.[1]) setVideoCat2(vc.categorySlugs[1]);
+          if (vc.infoRowTitle) setVideoInfoRowTitle(vc.infoRowTitle);
+        } catch { /* ignore */ }
+      }
+
       // Load categories
       const cats = await adminFetch<Array<{ id: string; name: string; slug: string; parentId: string | null }>>('/categories', { token });
       setCategories(cats.filter((c) => !c.parentId));
+
+      // Load video categories
+      try {
+        const vcats = await adminFetch<Array<{ id: string; name: string; slug: string }>>('/videos/categories', { token });
+        setVideoCategories(vcats);
+      } catch { /* ignore */ }
     } catch {
       setSections(DEFAULT_SECTIONS);
     } finally {
@@ -134,6 +161,29 @@ export default function HomeLayoutPage() {
       setMessage('Hero config saved successfully.');
     } catch {
       setError('Failed to save hero config.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveVideoHeroConfig = async () => {
+    if (!token) return;
+    setError('');
+    setMessage('');
+    setSaving(true);
+    try {
+      const config = {
+        categorySlugs: [videoCat1, videoCat2].filter(Boolean),
+        infoRowTitle: videoInfoRowTitle,
+      };
+      await adminFetch('/settings', {
+        token,
+        method: 'PUT',
+        body: JSON.stringify({ key: 'videoHeroConfig', value: JSON.stringify(config) }),
+      });
+      setMessage('Video hero config saved successfully.');
+    } catch {
+      setError('Failed to save video hero config.');
     } finally {
       setSaving(false);
     }
@@ -243,6 +293,33 @@ export default function HomeLayoutPage() {
         </div>
         <button onClick={saveHeroConfig} disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
           {saving ? 'Saving…' : 'Save Hero Config'}
+        </button>
+      </div>
+
+      {/* Video Hero Section Config */}
+      <h2 className="text-lg font-bold mt-10 mb-4">Video Hero Section Categories</h2>
+      <div className="bg-white rounded-lg shadow max-w-xl p-4 space-y-4">
+        <p className="text-xs text-gray-500">Choose 2 video categories to display next to the video slideshow, and set the info row title.</p>
+        <div>
+          <label className="block text-sm font-medium mb-1">Video Category Column 1</label>
+          <select value={videoCat1} onChange={(e) => setVideoCat1(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" aria-label="Video category 1">
+            <option value="">Auto (latest videos)</option>
+            {videoCategories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Video Category Column 2</label>
+          <select value={videoCat2} onChange={(e) => setVideoCat2(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" aria-label="Video category 2">
+            <option value="">Auto (latest videos)</option>
+            {videoCategories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Info Row Title</label>
+          <input value={videoInfoRowTitle} onChange={(e) => setVideoInfoRowTitle(e.target.value)} className="w-full border rounded px-3 py-2 text-sm" placeholder="அனைத்து வீடியோக்கள்" aria-label="Video info row title" />
+        </div>
+        <button onClick={saveVideoHeroConfig} disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
+          {saving ? 'Saving…' : 'Save Video Hero Config'}
         </button>
       </div>
     </div>

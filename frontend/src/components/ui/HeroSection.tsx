@@ -144,6 +144,12 @@ export default function HeroSection({ sliderArticles, categories, allArticles, h
 
   return (
     <section className="mb-8 space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-1 h-5 bg-accent-red rounded-full" />
+        <h2 className="text-base font-bold">செய்தி முக்கியம்</h2>
+        <span className="text-[10px] text-foreground/40 uppercase tracking-wider ml-1">Text News</span>
+      </div>
+
       {/* Row 1: Slider + 2 category columns */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
         <div className="lg:col-span-2 min-h-[320px] sm:min-h-[380px]">

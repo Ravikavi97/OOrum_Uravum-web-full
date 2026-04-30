@@ -6,6 +6,7 @@ import fs from 'fs/promises';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
+import { uploadRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
@@ -88,6 +89,7 @@ router.post(
   '/upload',
   requireAuth,
   requireRole('ADMIN', 'EDITOR', 'AUTHOR'),
+  uploadRateLimiter,
   (req: AuthenticatedRequest, res: Response, next) => {
     upload.single('file')(req, res, (err) => {
       if (err) {

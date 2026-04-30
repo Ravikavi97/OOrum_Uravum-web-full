@@ -4,6 +4,7 @@ import multer from 'multer';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
 import { invalidateByTags } from '../lib/cache';
+import { generateUniqueSlug } from '../lib/slug';
 
 const router = Router();
 
@@ -41,7 +42,7 @@ router.get('/', async (req: Request, res: Response) => {
         orderBy: { publishedAt: 'desc' },
         skip: offset,
         take: pageSize,
-        select: { id: true, name: true, content: true, sourceUrl: true, publishedAt: true, createdAt: true },
+        select: { id: true, name: true, slug: true, content: true, sourceUrl: true, publishedAt: true, createdAt: true },
       }),
       prisma.obituary.count(),
     ]);
@@ -50,6 +51,21 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('[obituaries] GET / error:', err);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch obituaries' } });
+  }
+});
+
+// ─── GET /slug/:slug — Get obituary by slug ─────────────────────────────────
+
+router.get('/slug/:slug', async (req: Request, res: Response) => {
+  try {
+    const obit = await prisma.obituary.findUnique({
+      where: { slug: req.params.slug as string },
+      select: { id: true, name: true, slug: true, content: true, sourceUrl: true, publishedAt: true, createdAt: true },
+    });
+    if (!obit) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Obituary not found' } }); return; }
+    res.json(obit);
+  } catch (err) {
+    res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch obituary' } });
   }
 });
 
@@ -112,15 +128,17 @@ router.post(
 
     try {
       const { name, content, publishedAt } = parsed.data;
+      const slug = await generateUniqueSlug(name, 'obituary');
 
       const obituary = await prisma.obituary.create({
         data: {
           name,
+          slug,
           content,
           publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
           ...(req.file && { imageData: new Uint8Array(req.file.buffer) }),
         },
-        select: { id: true, name: true, content: true, sourceUrl: true, publishedAt: true, createdAt: true },
+        select: { id: true, name: true, slug: true, content: true, sourceUrl: true, publishedAt: true, createdAt: true },
       });
 
       // Invalidate obituary caches
@@ -193,7 +211,7 @@ router.put(
           ...(publishedAt !== undefined && { publishedAt: new Date(publishedAt) }),
           ...(req.file && { imageData: new Uint8Array(req.file.buffer) }),
         },
-        select: { id: true, name: true, content: true, sourceUrl: true, publishedAt: true, createdAt: true },
+        select: { id: true, name: true, slug: true, content: true, sourceUrl: true, publishedAt: true, createdAt: true },
       });
 
       // Invalidate obituary caches

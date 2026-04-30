@@ -11,6 +11,7 @@ import {
 } from '../lib/cache';
 import { generateUniqueSlug } from '../lib/slug';
 import { revalidateFrontend } from '../lib/revalidate';
+import { sanitizeHtml } from '../lib/sanitize';
 
 const router = Router();
 
@@ -237,8 +238,8 @@ router.post(
         data: {
           title,
           slug,
-          content,
-          excerpt: excerpt ?? null,
+          content: sanitizeHtml(content),
+          excerpt: excerpt ? sanitizeHtml(excerpt) : null,
           status: 'DRAFT',
           isBreaking: isBreaking ?? false,
           featuredImage: featuredImage ?? null,
@@ -351,8 +352,8 @@ router.put(
         data: {
           ...(title !== undefined && { title }),
           ...(newSlug && { slug: newSlug }),
-          ...(content !== undefined && { content }),
-          ...(excerpt !== undefined && { excerpt }),
+          ...(content !== undefined && { content: sanitizeHtml(content) }),
+          ...(excerpt !== undefined && { excerpt: excerpt ? sanitizeHtml(excerpt) : null }),
           ...(categoryId !== undefined && { categoryId }),
           ...(featuredImage !== undefined && { featuredImage }),
           ...(sourceUrl !== undefined && { sourceUrl }),

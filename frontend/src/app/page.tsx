@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getArticles, getBreakingArticles, getCategories, getSiteSettings, getObituaries, getHomeLayout, getHeroConfig } from "@/services/api";
-import type { Article, Category, Obituary, HomeLayoutSection, HeroConfig } from "@/services/api";
+import { getArticles, getBreakingArticles, getCategories, getSiteSettings, getObituaries, getHomeLayout, getHeroConfig, getVideoPosts, getVideoHeroConfig } from "@/services/api";
+import type { Article, Category, Obituary, HomeLayoutSection, HeroConfig, VideoPost, VideoHeroConfig } from "@/services/api";
 import ArticleCard, { ArticleImage } from "@/components/article/ArticleCard";
 import HeroSection from "@/components/ui/HeroSection";
+import VideoHeroSection from "@/components/ui/VideoHeroSection";
 import Pagination from "@/components/ui/Pagination";
 import ArchiveSidebar from "@/components/ui/ArchiveSidebar";
 import AdSidebar from "@/components/ui/AdSidebar";
@@ -93,14 +94,16 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const emptyObits = { data: [] as Obituary[], total: 0, page: 1, pageSize: 10, totalPages: 0 };
 
   // Always fetch page-1 data for hero/topics + paginated data for Latest News grid
-  const [latestRes, heroRes, brk, cats, obitsRes, layoutSections, heroConfig] = await Promise.all([
+  const [latestRes, heroRes, brk, cats, obitsRes, layoutSections, heroConfig, videoPosts, videoHeroConfig] = await Promise.all([
     safe(() => getArticles({ page, pageSize: PAGE_SIZE, status: "PUBLISHED" }), empty),
     safe(() => getArticles({ page: 1, pageSize: 20, status: "PUBLISHED" }), empty),
     safe(() => getBreakingArticles(), empty),
     safe(() => getCategories(), [] as Category[]),
-    safe(() => getObituaries({ pageSize: 5 }), emptyObits),
+    safe(() => getObituaries({ pageSize: 6 }), emptyObits),
     safe(() => getHomeLayout(), [] as HomeLayoutSection[]),
     safe(() => getHeroConfig(), { categorySlugs: [], infoRowTitle: 'தகவல் கண்ணோட்டம்' } as HeroConfig),
+    safe(() => getVideoPosts(), [] as VideoPost[]),
+    safe(() => getVideoHeroConfig(), { categorySlugs: [], infoRowTitle: 'அனைத்து வீடியோக்கள்' } as VideoHeroConfig),
   ]);
 
   // Helper to check if a section is visible (default: visible if no config)
@@ -133,10 +136,19 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   }
 
   // Build ordered list of main sections (excluding sidebars which are structural)
-  const mainSectionIds = ['ticker', 'hero', 'topicCards', 'latestNews', 'obituary'];
-  const orderedSections = layoutSections.length > 0
-    ? layoutSections.filter((s) => mainSectionIds.includes(s.id)).sort((a, b) => a.order - b.order)
-    : mainSectionIds.map((id, i) => ({ id, label: id, visible: true, order: i }));
+  const mainSectionIds = ['videoHero', 'ticker', 'hero', 'obituary', 'topicCards', 'latestNews'];
+  let orderedSections: { id: string; label: string; visible: boolean; order: number }[];
+  if (layoutSections.length > 0) {
+    const configured = layoutSections.filter((s) => mainSectionIds.includes(s.id)).sort((a, b) => a.order - b.order);
+    // Add any missing main sections (e.g. videoHero) that aren't in the saved config yet
+    const configuredIds = new Set(configured.map((s) => s.id));
+    const missing = mainSectionIds
+      .filter((id) => !configuredIds.has(id))
+      .map((id, i) => ({ id, label: id, visible: true, order: configured.length + i }));
+    orderedSections = [...configured, ...missing];
+  } else {
+    orderedSections = mainSectionIds.map((id, i) => ({ id, label: id, visible: true, order: i }));
+  }
 
   // Section renderers
   const renderSection = (sectionId: string) => {
@@ -153,6 +165,15 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             allArticles={heroArticles}
             heroCategorySlugs={heroCatSlugs}
             infoRowTitle={heroConfig.infoRowTitle}
+          />
+        ) : null;
+      case 'videoHero':
+        return videoPosts.length > 0 ? (
+          <VideoHeroSection
+            key="videoHero"
+            videos={videoPosts}
+            videoCategorySlugs={videoHeroConfig.categorySlugs}
+            videoInfoRowTitle={videoHeroConfig.infoRowTitle}
           />
         ) : null;
       case 'topicCards':
@@ -180,64 +201,72 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             )}
           </div>
         );
-      case 'obituary':
+      case 'obituary': {
+        // Combine category articles + standalone obituaries, take latest 6
+        const allObits: { type: 'article' | 'obituary'; id: string; title: string; excerpt: string; image: string; date: string; link: string; author?: string }[] = [];
+        for (const a of obituaryCatArticles) {
+          allObits.push({ type: 'article', id: a.id, title: a.title, excerpt: a.excerpt || a.content, image: a.featuredImage || '', date: a.publishedAt || '', link: `/news/${a.slug}`, author: a.author.name });
+        }
+        for (const o of obituaries) {
+          allObits.push({ type: 'obituary', id: o.id, title: o.name, excerpt: o.content, image: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/obituaries/${o.id}/image`, date: o.publishedAt, link: `/obituary/${o.slug}` });
+        }
+        const displayObits = allObits.slice(0, 6);
+        if (!displayObits.length) return null;
+
         return (
-          <div key="obituary" className="mt-8 rounded-2xl bg-card-bg shadow-sm overflow-hidden">
-            <div className="bg-accent-red px-4 py-2.5 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">Obituary / Tributes</h3>
+          <section key="obituary" className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="w-1 h-5 bg-accent-red rounded-full" />
+                <h2 className="text-base font-bold">இரங்கல் / அஞ்சலி</h2>
+                <span className="text-[10px] text-foreground/40 uppercase tracking-wider ml-1">Obituary / Tributes</span>
+              </div>
               {obituaryCat && (
-                <Link href={`/category/${obituaryCat.slug}`} className="text-[10px] text-white/60 hover:text-white transition-colors">View All &rarr;</Link>
+                <Link href={`/category/${obituaryCat.slug}`} className="text-xs text-accent-red hover:underline">View All →</Link>
               )}
             </div>
-            <div className="p-4 flex flex-col gap-3">
-              {/* Articles from the obituary category */}
-              {obituaryCatArticles.map((a) => (
-                <Link key={a.id} href={`/news/${a.slug}`} className="block rounded-lg bg-gray-50 border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="w-full h-64 sm:h-80 bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden">
-                    <ArticleImage featuredImage={a.featuredImage} title={a.title} categoryName={a.category.name} />
-                  </div>
-                  <div className="p-3">
-                    <p className="text-[13px] font-bold text-foreground/80">{a.title}</p>
-                    <p className="text-[10px] text-foreground/50 mt-1 line-clamp-2">{a.excerpt || a.content}</p>
-                    <p className="text-[9px] text-foreground/30 mt-1.5">{a.author.name} · {fmtDate(a.publishedAt)}</p>
-                  </div>
-                </Link>
-              ))}
-              {/* Standalone obituaries */}
-              {obituaries.map((o) => (
-                <Link key={o.id} href={`/obituary/${o.id}`} className="block rounded-lg bg-gray-50 border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="w-full h-64 sm:h-80 bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {displayObits.map((item) => (
+                <Link key={item.id} href={item.link} className="group rounded-xl bg-card-bg shadow-sm overflow-hidden hover:shadow-md transition-all hover:-translate-y-0.5">
+                  <div className="relative w-full overflow-hidden bg-gray-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/obituaries/${o.id}/image`} alt={o.name} className="w-full h-full object-cover" />
+                    {item.type === 'article' ? (
+                      <ArticleImage featuredImage={item.image || null} title={item.title} categoryName="Obituary" className="group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <img src={item.image} alt={item.title} className="w-full h-auto object-contain group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                    )}
                   </div>
                   <div className="p-3">
-                    <p className="text-[13px] font-bold text-foreground/80">{o.name}</p>
-                    <p className="text-[10px] text-foreground/50 mt-1 line-clamp-2">{o.content}</p>
-                    <p className="text-[9px] text-foreground/30 mt-1.5">{new Date(o.publishedAt).toLocaleDateString("ta-IN")}</p>
+                    <p className="text-sm font-bold leading-tight line-clamp-2">{item.title}</p>
+                    <p className="text-[10px] text-foreground/50 mt-1.5">{fmtDate(item.date)}</p>
                   </div>
                 </Link>
               ))}
-              {obituaryCatArticles.length === 0 && obituaries.length === 0 && (
-                <p className="text-xs text-foreground/40 text-center py-4">No obituaries yet</p>
-              )}
             </div>
-          </div>
+          </section>
         );
+      }
       default:
         return null;
     }
   };
 
-  // Split: ticker renders outside main, rest inside
+  // Split: ticker renders outside main, videoHero before ticker, rest inside
   const tickerOrder = orderedSections.find((s) => s.id === 'ticker');
-  const contentSections = orderedSections.filter((s) => s.id !== 'ticker');
+  const videoHeroOrder = orderedSections.find((s) => s.id === 'videoHero');
+  const contentSections = orderedSections.filter((s) => s.id !== 'ticker' && s.id !== 'videoHero');
 
   return (
     <>
       {tickerOrder && isVisible('ticker') && <Ticker articles={heroArticles.slice(0, 20)} />}
+      {videoHeroOrder && isVisible('videoHero') && videoPosts.length > 0 && (
+        <div className="mx-auto w-full max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <VideoHeroSection videos={videoPosts} />
+        </div>
+      )}
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Render main sections in configured order (hero, topicCards before the grid) */}
-        {contentSections.filter((s) => s.id === 'hero' || s.id === 'topicCards').map((s) => renderSection(s.id))}
+        {contentSections.filter((s) => s.id === 'hero' || s.id === 'obituary' || s.id === 'topicCards' || s.id === 'videoHero').map((s) => renderSection(s.id))}
 
         {/* Grid: sidebars + remaining content sections */}
         <section className="grid grid-cols-1 lg:grid-cols-5 gap-5">
@@ -249,7 +278,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
           <div className={`order-1 lg:order-2 ${isVisible('adSidebar') && isVisible('archiveSidebar') ? 'lg:col-span-3' : isVisible('adSidebar') || isVisible('archiveSidebar') ? 'lg:col-span-4' : 'lg:col-span-5'}`}>
             {/* Render latestNews and obituary in configured order */}
-            {contentSections.filter((s) => s.id !== 'hero' && s.id !== 'topicCards').map((s) => renderSection(s.id))}
+            {contentSections.filter((s) => s.id !== 'hero' && s.id !== 'topicCards' && s.id !== 'videoHero' && s.id !== 'obituary').map((s) => renderSection(s.id))}
           </div>
 
           {isVisible('archiveSidebar') && (

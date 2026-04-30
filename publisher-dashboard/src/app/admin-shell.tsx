@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Media', href: '/media', icon: '🖼️' },
   { label: 'Comments', href: '/comments', icon: '💬', roles: ['ADMIN', 'EDITOR'] },
   { label: 'Obituaries', href: '/obituaries', icon: '🕯️' },
+  { label: 'Videos', href: '/videos', icon: '🎬' },
   { label: 'Advertisements', href: '/advertisements', icon: '📢', roles: ['ADMIN'] },
   { label: 'Home Layout', href: '/home-layout', icon: '🏠', roles: ['ADMIN'] },
   { label: 'Settings', href: '/settings', icon: '⚙️', roles: ['ADMIN'] },

@@ -75,7 +75,7 @@ router.post(
           role: role ?? 'AUTHOR',
           bio: bio ?? null,
           profileImage: profileImage ?? null,
-          socialLinks: socialLinks ?? Prisma.JsonNull,
+          socialLinks: socialLinks ?? null,
         },
         select: {
           id: true, email: true, name: true, slug: true, role: true,
@@ -192,7 +192,7 @@ router.put(
           ...(role !== undefined && { role }),
           ...(bio !== undefined && { bio }),
           ...(profileImage !== undefined && { profileImage }),
-          ...(socialLinks !== undefined && { socialLinks: socialLinks === null ? Prisma.JsonNull : socialLinks }),
+          ...(socialLinks !== undefined && { socialLinks: socialLinks === null ? null : socialLinks }),
         },
         select: {
           id: true, email: true, name: true, slug: true, role: true,

@@ -37,3 +37,21 @@ export const authRateLimiter = rateLimit({
   },
   handler: rateLimitHandler,
 });
+
+// ─── Upload rate limiter: 50 uploads per hour per user ───────────────────────
+
+export const uploadRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 50,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => {
+    const authReq = req as AuthenticatedRequest;
+    return authReq.user?.userId ?? req.ip ?? 'unknown';
+  },
+  handler: (_req: Request, res: Response) => {
+    res.status(429).json({
+      error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many uploads. Please try again later.' },
+    });
+  },
+});

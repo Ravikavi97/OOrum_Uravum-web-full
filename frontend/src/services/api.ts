@@ -204,6 +204,7 @@ export async function searchArticles(
 export interface Obituary {
   id: string;
   name: string;
+  slug: string;
   content: string;
   sourceUrl: string | null;
   publishedAt: string;
@@ -276,4 +277,69 @@ export async function getThemeColors(): Promise<ThemeColors | null> {
 export async function getLogos(): Promise<{ headerLogo: string; footerLogo: string }> {
   const settings = await getSiteSettings();
   return { headerLogo: settings.headerLogo || '', footerLogo: settings.footerLogo || '' };
+}
+
+// ─── Video endpoints ─────────────────────────────────────────────────────────
+
+export interface VideoPost {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  videoUrl: string;
+  thumbnailUrl: string | null;
+  platform: string;
+  active: boolean;
+  order: number;
+  categoryId: string | null;
+  category: { id: string; name: string; slug: string } | null;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getVideoPosts(): Promise<VideoPost[]> {
+  return fetchApi<VideoPost[]>('/videos', {
+    next: { revalidate: 60, tags: ['videos'] },
+  });
+}
+
+export async function getVideoBySlug(slug: string): Promise<VideoPost> {
+  return fetchApi<VideoPost>(`/videos/${encodeURIComponent(slug)}`, {
+    next: { revalidate: 60, tags: ['videos', `video-${slug}`] },
+  });
+}
+
+export async function getObituaryBySlug(slug: string): Promise<Obituary> {
+  return fetchApi<Obituary>(`/obituaries/slug/${encodeURIComponent(slug)}`, {
+    next: { revalidate: 60, tags: ['obituaries', `obituary-${slug}`] },
+  });
+}
+
+export interface VideoCat {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export async function getVideoCategories(): Promise<VideoCat[]> {
+  return fetchApi<VideoCat[]>('/videos/categories', {
+    next: { revalidate: 300, tags: ['videos'] },
+  });
+}
+
+export interface VideoHeroConfig {
+  categorySlugs: string[];
+  infoRowTitle: string;
+}
+
+export async function getVideoHeroConfig(): Promise<VideoHeroConfig> {
+  const settings = await getSiteSettings();
+  const defaults: VideoHeroConfig = { categorySlugs: [], infoRowTitle: 'அனைத்து வீடியோக்கள்' };
+  if (!settings.videoHeroConfig) return defaults;
+  try {
+    return { ...defaults, ...JSON.parse(settings.videoHeroConfig) };
+  } catch {
+    return defaults;
+  }
 }

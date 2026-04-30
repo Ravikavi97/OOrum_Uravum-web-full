@@ -187,7 +187,7 @@ export function generateTamilSlug(title: string): string {
 
 // ─── Unique Slug with DB Check ───────────────────────────────────────────────
 
-type SlugModel = 'article' | 'category' | 'tag' | 'user';
+type SlugModel = 'article' | 'category' | 'tag' | 'user' | 'videoPost' | 'obituary';
 
 /**
  * Check if a slug already exists in the given model's table.
@@ -206,6 +206,12 @@ async function slugExists(slug: string, model: SlugModel): Promise<boolean> {
       break;
     case 'user':
       record = await prisma.user.findUnique({ where: { slug } });
+      break;
+    case 'videoPost':
+      record = await prisma.videoPost.findUnique({ where: { slug } });
+      break;
+    case 'obituary':
+      record = await prisma.obituary.findUnique({ where: { slug } });
       break;
     default:
       throw new Error(`Unknown model: ${model}`);

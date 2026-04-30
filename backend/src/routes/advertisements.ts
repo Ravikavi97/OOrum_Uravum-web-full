@@ -10,7 +10,8 @@ const createSchema = z.object({
   description: z.string().optional(),
   imageUrl: z.string().optional(),
   linkUrl: z.string().optional(),
-  position: z.enum(['sidebar', 'banner']).optional(),
+  position: z.enum(['sidebar', 'banner', 'header']).optional(),
+  cropPosition: z.string().optional().nullable(),
   active: z.boolean().optional(),
   order: z.number().optional(),
 });

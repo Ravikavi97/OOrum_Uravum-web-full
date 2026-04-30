@@ -41,7 +41,7 @@ export function signAccessToken(payload: AuthPayload): string {
 export function signRefreshToken(payload: AuthPayload): string {
   return jwt.sign(payload, getRefreshSecret(), {
     algorithm: 'HS256',
-    expiresIn: '7d',
+    expiresIn: '1d',
   });
 }
 

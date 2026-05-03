@@ -156,6 +156,15 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ sl
                 description={video.description || undefined}
               />
             </div>
+
+            {/* Share buttons */}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <ShareButtons
+                url={`${SITE_URL}/videos/${video.slug}`}
+                title={video.title}
+                description={video.description || undefined}
+              />
+            </div>
           </div>
         </div>
 

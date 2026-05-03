@@ -98,6 +98,13 @@ export async function adminFetch<T>(
         headers: buildHeaders(newToken),
         body,
       });
+    } else {
+      // Both tokens expired — force logout
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      localStorage.removeItem('admin_refresh_token');
+      window.dispatchEvent(new CustomEvent('session-expired'));
+      throw new AdminApiError(401, 'SESSION_EXPIRED', 'Session expired. Please login again.');
     }
   }
 

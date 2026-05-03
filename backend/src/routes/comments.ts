@@ -2,6 +2,7 @@ import { Router, Response, Request } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
+import { createAdminNotification } from '../lib/notify';
 
 const router = Router();
 
@@ -64,6 +65,14 @@ router.post('/', async (req: Request, res: Response) => {
         status: isFlagged ? 'FLAGGED' : 'PENDING',
         articleId,
       },
+    });
+
+    // Notify admin
+    createAdminNotification({
+      type: 'comment_pending',
+      title: 'புதிய கருத்து',
+      message: `${displayName} posted a comment${isFlagged ? ' (FLAGGED)' : ''}`,
+      link: '/comments',
     });
 
     res.status(201).json(comment);

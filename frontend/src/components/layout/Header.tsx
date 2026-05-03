@@ -5,6 +5,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCategories, getSiteSettings } from '@/services/api';
 import type { Category } from '@/services/api';
+import { useUserAuth } from '@/contexts/UserAuthContext';
+import AuthModal from '@/components/ui/AuthModal';
 
 const DEFAULT_SITE_NAME = 'OORUM URAVUM';
 const DEFAULT_TAGLINE = 'ஒன்று பட்டால் உண்டு வாழ்வு';
@@ -217,6 +219,8 @@ function HeaderAdSlideshow({ ads }: { ads: HeaderAd[] }) {
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [dateStr, setDateStr] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
@@ -224,7 +228,9 @@ export default function Header() {
   const [tagline, setTagline] = useState(DEFAULT_TAGLINE);
   const [headerLogo, setHeaderLogo] = useState('/logo.png');
   const [headerAds, setHeaderAds] = useState<HeaderAd[]>([]);
+  const { user, logout } = useUserAuth();
   const router = useRouter();
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setDateStr(getCurrentDateTamil());
@@ -297,7 +303,7 @@ export default function Header() {
             </div>
           )}
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Search icon */}
             <button
               type="button"
@@ -309,6 +315,50 @@ export default function Header() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </button>
+
+            {/* User auth area */}
+            {user ? (
+              <div className="hidden md:flex items-center gap-2">
+                {/* Post obituary button */}
+                <Link
+                  href="/submit-obituary"
+                  className="flex items-center gap-1.5 bg-accent-red text-white px-3 py-1.5 rounded-full text-xs font-bold hover:bg-accent-red/90 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                  பதிவிடு
+                </Link>
+                {/* User avatar dropdown */}
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="flex items-center gap-2 rounded-full hover:bg-white/10 px-2 py-1 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-accent-red flex items-center justify-center text-white text-sm font-bold">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-xs text-white/80 max-w-[80px] truncate">{user.name}</span>
+                  </button>
+                  {userMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg ring-1 ring-black/5 py-1 z-50 animate-dropdown">
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                      </div>
+                      <Link href="/submit-obituary" onClick={() => setUserMenuOpen(false)} className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">இரங்கல் பதிவிடு</Link>
+                      <button onClick={() => { logout(); setUserMenuOpen(false); }} className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">வெளியேறு</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="hidden md:flex items-center gap-1.5 bg-white/10 text-white px-3 py-1.5 rounded-full text-xs font-medium hover:bg-white/20 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" /></svg>
+                உள்நுழைய
+              </button>
+            )}
 
             {/* Hamburger for mobile */}
             <button
@@ -419,8 +469,28 @@ export default function Header() {
               </button>
             </div>
           </form>
+          {/* Mobile auth */}
+          <div className="px-4 pb-4 border-t border-white/10 pt-3">
+            {user ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-accent-red flex items-center justify-center text-white text-sm font-bold">{user.name.charAt(0).toUpperCase()}</div>
+                  <span className="text-sm text-white/80">{user.name}</span>
+                </div>
+                <div className="flex gap-2">
+                  <Link href="/submit-obituary" onClick={() => setMenuOpen(false)} className="bg-accent-red text-white px-3 py-1.5 rounded text-xs font-bold">பதிவிடு</Link>
+                  <button onClick={() => { logout(); setMenuOpen(false); }} className="text-xs text-white/60 hover:text-white">வெளியேறு</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => { setAuthModalOpen(true); setMenuOpen(false); }} className="w-full bg-accent-red text-white py-2 rounded text-sm font-bold">உள்நுழைய / பதிவு</button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Auth Modal */}
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </header>
   );
 }

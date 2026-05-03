@@ -28,6 +28,40 @@ enum CommentStatus {
   REJECTED
 }
 
+// ─── FrontendUser (public site users) ────────────────────────────────────────
+
+model FrontendUser {
+  id           String    @id @default(cuid()) @db.VarChar(30)
+  name         String    @db.VarChar(255)
+  email        String    @unique @db.VarChar(255)
+  phone        String?   @db.VarChar(20)
+  address      String?   @db.Text
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  avatarUrl    String?   @map("avatar_url") @db.VarChar(500)
+  active       Boolean   @default(true)
+  failedLogins Int       @default(0) @map("failed_logins")
+  lockedUntil  DateTime? @map("locked_until")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("frontend_users")
+}
+
+// ─── Admin Notification ──────────────────────────────────────────────────────
+
+model AdminNotification {
+  id        String   @id @default(cuid()) @db.VarChar(30)
+  type      String   @db.VarChar(50) // obituary_submission, comment_pending, etc.
+  title     String   @db.VarChar(500)
+  message   String   @db.Text
+  link      String   @db.VarChar(500) // CMS page to redirect to
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([read, createdAt(sort: Desc)])
+  @@map("admin_notifications")
+}
+
 // ─── User ────────────────────────────────────────────────────────────────────
 
 model User {
@@ -36,7 +70,7 @@ model User {
   passwordHash String    @map("password_hash") @db.VarChar(255)
   name         String    @db.VarChar(255)
   slug         String    @unique @db.VarChar(255)
-  role         Role      @default(AUTHOR)
+  role         String    @default("AUTHOR") @db.VarChar(50)
   bio          String?   @db.Text
   profileImage String?   @map("profile_image") @db.VarChar(500)
   socialLinks  Json?     @map("social_links")
@@ -186,15 +220,19 @@ model IngestionLog {
 // ─── Obituary ────────────────────────────────────────────────────────────────
 
 model Obituary {
-  id          String   @id @default(cuid()) @db.VarChar(30)
-  name        String   @db.VarChar(500)
-  slug        String   @unique @db.VarChar(500)
-  content     String   @db.Text
-  sourceUrl   String?  @unique @map("source_url") @db.VarChar(2048)
-  imageData   Bytes?   @map("image_data") @db.LongBlob
-  publishedAt DateTime @default(now()) @map("published_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid()) @db.VarChar(30)
+  name           String   @db.VarChar(500)
+  slug           String   @unique @db.VarChar(500)
+  content        String   @db.Text
+  sourceUrl      String?  @unique @map("source_url") @db.VarChar(2048)
+  imageData      Bytes?   @map("image_data") @db.LongBlob
+  status         String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  submitterName  String?  @map("submitter_name") @db.VarChar(255)
+  submitterEmail String?  @map("submitter_email") @db.VarChar(255)
+  publishedAt    DateTime @default(now()) @map("published_at")
+  createdAt      DateTime @default(now()) @map("created_at")
 
+  @@index([status])
   @@map("obituaries")
 }
 

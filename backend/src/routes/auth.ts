@@ -35,7 +35,6 @@ const loginRateLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req: Request) => req.ip ?? 'unknown',
   handler: (_req: Request, res: Response) => {
     res.status(429).json({
       error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many login attempts. Please try again in 15 minutes.' },

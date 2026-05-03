@@ -3,12 +3,12 @@ import type { Request, Response, NextFunction } from 'express';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type Role = 'ADMIN' | 'EDITOR' | 'AUTHOR';
+export type Role = string; // Dynamic roles — 'ADMIN', 'EDITOR', 'AUTHOR', or custom
 
 export interface AuthPayload {
   userId: string;
   email: string;
-  role: Role;
+  role: string;
 }
 
 export interface AuthenticatedRequest extends Request {

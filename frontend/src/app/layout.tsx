@@ -5,6 +5,7 @@ import Footer from "@/components/layout/Footer";
 import PopularArticles from "@/components/ui/PopularArticles";
 import ThemeProvider from "@/components/ui/ThemeProvider";
 import ScrollToTop from "@/components/ui/ScrollToTop";
+import { UserAuthProvider } from "@/contexts/UserAuthContext";
 import "./globals.css";
 
 const notoSansTamil = Noto_Sans_Tamil({
@@ -46,6 +47,7 @@ export default function RootLayout({
       className={`${notoSansTamil.variable} ${muktaMalar.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
+        <UserAuthProvider>
         <ThemeProvider>
           <Header />
           <main className="flex-1">{children}</main>
@@ -53,6 +55,7 @@ export default function RootLayout({
           <Footer />
           <ScrollToTop />
         </ThemeProvider>
+        </UserAuthProvider>
       </body>
     </html>
   );

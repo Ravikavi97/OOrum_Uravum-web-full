@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 
-export type UserRole = 'ADMIN' | 'EDITOR' | 'AUTHOR';
+export type UserRole = string; // Dynamic roles — 'ADMIN', 'EDITOR', 'AUTHOR', or custom
 
 export interface AuthUser {
   id: string;
@@ -48,13 +48,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Sync token state when api.ts refreshes it
   useEffect(() => {
-    const handler = (e: Event) => {
+    const handleRefresh = (e: Event) => {
       const newToken = (e as CustomEvent<string>).detail;
       if (newToken) setToken(newToken);
     };
-    window.addEventListener('token-refreshed', handler);
-    return () => window.removeEventListener('token-refreshed', handler);
+    const handleExpired = () => {
+      // Force logout when session expires
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      localStorage.removeItem('admin_refresh_token');
+    };
+    window.addEventListener('token-refreshed', handleRefresh);
+    window.addEventListener('session-expired', handleExpired);
+    return () => {
+      window.removeEventListener('token-refreshed', handleRefresh);
+      window.removeEventListener('session-expired', handleExpired);
+    };
   }, []);
+
+  // Periodic token check — verify token is still valid every 5 minutes
+  useEffect(() => {
+    if (!token) return;
+    const checkToken = async () => {
+      try {
+        const res = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: localStorage.getItem('admin_refresh_token') || '' }),
+        });
+        if (!res.ok) {
+          // Refresh token expired — force logout
+          setToken(null);
+          setUser(null);
+          localStorage.removeItem('admin_token');
+          localStorage.removeItem('admin_user');
+          localStorage.removeItem('admin_refresh_token');
+        } else {
+          const data = await res.json();
+          setToken(data.accessToken);
+          localStorage.setItem('admin_token', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('admin_refresh_token', data.refreshToken);
+        }
+      } catch { /* network error — skip */ }
+    };
+    const interval = setInterval(checkToken, 5 * 60 * 1000); // every 5 minutes
+    return () => clearInterval(interval);
+  }, [token]);
 
   const logout = useCallback(() => {
     // Notify backend (fire-and-forget)

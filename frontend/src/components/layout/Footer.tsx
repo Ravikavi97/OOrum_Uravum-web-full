@@ -12,6 +12,7 @@ const DEFAULT_DESCRIPTION = 'தமிழ் செய்திகள் — ச
 const quickLinks = [
   { label: 'எங்களைப் பற்றி', href: '/about' },
   { label: 'தொடர்பு', href: '/contact' },
+  { label: 'இரங்கல் சமர்ப்பிக்க', href: '/submit-obituary' },
   { label: 'தனியுரிமை', href: '/privacy' },
   { label: 'விதிமுறைகள்', href: '/terms' },
 ];

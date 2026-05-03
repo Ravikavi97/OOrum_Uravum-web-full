@@ -20,6 +20,9 @@ import obituariesRouter from './routes/obituaries';
 import visitorsRouter from './routes/visitors';
 import adsRouter from './routes/advertisements';
 import videosRouter from './routes/videos';
+import frontendAuthRouter from './routes/frontendAuth';
+import notificationsRouter from './routes/notifications';
+import dashboardRouter from './routes/dashboard';
 import { publicRateLimiter } from './middleware/rateLimiter';
 import { setupSwagger } from './swagger';
 
@@ -84,6 +87,9 @@ app.use('/api/obituaries', obituariesRouter);
 app.use('/api/visitors', visitorsRouter);
 app.use('/api/ads', adsRouter);
 app.use('/api/videos', videosRouter);
+app.use('/api/public-auth', frontendAuthRouter);
+app.use('/api/notifications', notificationsRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 // Swagger API docs
 setupSwagger(app);

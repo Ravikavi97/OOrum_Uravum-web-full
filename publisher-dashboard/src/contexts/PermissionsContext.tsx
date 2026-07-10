@@ -2,13 +2,13 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { adminFetch } from '@/lib/api';
-import { DEFAULT_PERMISSIONS, hasPageAccess, type RolePermissions, type PageId } from '@/lib/permissions';
+import { DEFAULT_PERMISSIONS, hasPageAccess, hasActionAccess, parsePermissions, type RolePermissions, type PageId, type Action } from '@/lib/permissions';
 
 interface PermissionsContextType {
   permissions: RolePermissions;
   loading: boolean;
   canAccess: (pageId: PageId) => boolean;
+  canAction: (pageId: PageId, action: Action) => boolean;
   reload: () => Promise<void>;
 }
 
@@ -22,11 +22,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const loadPermissions = useCallback(async () => {
     if (!token) { setLoading(false); return; }
     try {
-      const settings = await adminFetch<Array<{ key: string; value: string }>>('/settings', { token });
-      const entry = Array.isArray(settings) ? settings.find((s) => s.key === 'rolePermissions') : null;
-      if (entry?.value) {
-        const parsed = JSON.parse(entry.value);
-        setPermissions({ ...DEFAULT_PERMISSIONS, ...parsed });
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+      const res = await fetch(`${API_URL}/settings/public`);
+      if (res.ok) {
+        const settings = await res.json();
+        if (settings.rolePermissions) {
+          const parsed = parsePermissions(settings.rolePermissions);
+          setPermissions({ ...DEFAULT_PERMISSIONS, ...parsed });
+        }
       }
     } catch { /* use defaults */ }
     finally { setLoading(false); }
@@ -39,8 +42,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return hasPageAccess(user.role, pageId, permissions);
   }, [user, permissions]);
 
+  const canAction = useCallback((pageId: PageId, action: Action): boolean => {
+    if (!user) return false;
+    return hasActionAccess(user.role, pageId, action, permissions);
+  }, [user, permissions]);
+
   return (
-    <PermissionsContext.Provider value={{ permissions, loading, canAccess, reload: loadPermissions }}>
+    <PermissionsContext.Provider value={{ permissions, loading, canAccess, canAction, reload: loadPermissions }}>
       {children}
     </PermissionsContext.Provider>
   );

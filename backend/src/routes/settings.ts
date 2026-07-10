@@ -21,6 +21,9 @@ const PUBLIC_SETTING_KEYS = [
   'headerLogo',
   'footerLogo',
   'themeColors',
+  'rolePermissions',
+  'customRoles',
+  'videoHeroConfig',
 ];
 
 // ─── Zod Schema ──────────────────────────────────────────────────────────────

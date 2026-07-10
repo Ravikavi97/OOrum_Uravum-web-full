@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { adminFetch, AdminApiError, toQueryString } from '@/lib/api';
 import RichTextEditor from '@/components/RichTextEditor';
 
@@ -71,6 +72,7 @@ interface FieldErrors {
 
 export default function ArticlesPage() {
   const { token, user } = useAuth();
+  const { canAction } = usePermissions();
 
   // List state
   const [articles, setArticles] = useState<PaginatedArticles | null>(null);
@@ -341,12 +343,14 @@ export default function ArticlesPage() {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Articles</h1>
+        {canAction('articles', 'create') && (
         <button
           onClick={() => { resetForm(); setShowForm(true); }}
           className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
         >
           + New Article
         </button>
+        )}
       </div>
 
       {/* Status filter tabs */}
@@ -468,7 +472,7 @@ export default function ArticlesPage() {
             )}
           </div>
 
-          {/* Featured image upload */}
+          {/* Featured image — upload or URL */}
           <div>
             <label className="block text-sm text-gray-600 mb-1">Featured Image</label>
             {imagePreview ? (
@@ -477,9 +481,10 @@ export default function ArticlesPage() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   {uploadingImage && <p className="text-xs text-blue-600">Uploading…</p>}
-                  {!uploadingImage && formFeaturedImage && <p className="text-xs text-green-600">Image uploaded</p>}
+                  {!uploadingImage && formFeaturedImage && <p className="text-xs text-green-600">✓ Image set</p>}
+                  <button type="button" onClick={() => imageInputRef.current?.click()} className="text-xs text-blue-600 hover:underline">Change image</button>
                   <button
                     type="button"
                     onClick={() => { setImagePreview(null); setFormFeaturedImage(''); if (imageInputRef.current) imageInputRef.current.value = ''; }}
@@ -490,19 +495,44 @@ export default function ArticlesPage() {
                 </div>
               </div>
             ) : (
-              <div
-                onClick={() => imageInputRef.current?.click()}
-                className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') imageInputRef.current?.click(); }}
-              >
-                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
-                </svg>
-                <div>
-                  <p className="text-sm text-gray-700">Click to upload featured image</p>
-                  <p className="text-xs text-gray-400">JPEG, PNG, WebP or AVIF</p>
+              <div className="space-y-2">
+                {/* Upload option */}
+                <div
+                  onClick={() => imageInputRef.current?.click()}
+                  className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') imageInputRef.current?.click(); }}
+                >
+                  <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm text-gray-700">Upload image</p>
+                    <p className="text-xs text-gray-400">JPEG, PNG, WebP or AVIF</p>
+                  </div>
+                </div>
+                {/* OR divider */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-xs text-gray-400">OR</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+                {/* URL input */}
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={formFeaturedImage}
+                    onChange={(e) => {
+                      setFormFeaturedImage(e.target.value);
+                      setImagePreview(e.target.value || null);
+                    }}
+                    placeholder="Paste image URL (e.g. from Media Library)"
+                    className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {formFeaturedImage && !imagePreview && (
+                    <button type="button" onClick={() => setImagePreview(formFeaturedImage)} className="text-xs text-blue-600 hover:underline px-2">Preview</button>
+                  )}
                 </div>
               </div>
             )}
@@ -597,7 +627,7 @@ export default function ArticlesPage() {
                     <td className="px-4 py-2">{a.author?.name}</td>
                     <td className="px-4 py-2">{a.category?.name}</td>
                     <td className="px-4 py-2">
-                      {canEditArticle(a) ? (
+                      {canEditArticle(a) && canAction('articles', 'publish') ? (
                         <select
                           value={a.status}
                           onChange={(e) => handleStatusChange(a.id, e.target.value)}
@@ -616,7 +646,7 @@ export default function ArticlesPage() {
                       {new Date(a.updatedAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2">
-                      {canEditArticle(a) && (
+                      {canEditArticle(a) && canAction('articles', 'edit') && (
                         <button
                           onClick={() => openEditForm(a)}
                           className="text-blue-600 hover:underline text-xs"

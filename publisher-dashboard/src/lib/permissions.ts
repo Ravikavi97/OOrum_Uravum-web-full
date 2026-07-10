@@ -17,23 +17,76 @@ export const ALL_PAGES = [
 
 export type PageId = typeof ALL_PAGES[number]['id'];
 
+// Actions that can be controlled per page
+export const ACTIONS = ['view', 'create', 'edit', 'delete', 'publish'] as const;
+export type Action = typeof ACTIONS[number];
+
 // Built-in roles that cannot be deleted
 export const BUILT_IN_ROLES = ['ADMIN', 'EDITOR', 'AUTHOR'] as const;
 
-// Default permissions for built-in roles
-export const DEFAULT_PERMISSIONS: Record<string, PageId[]> = {
-  ADMIN: ALL_PAGES.map((p) => p.id),
-  EDITOR: ['dashboard', 'articles', 'categories', 'tags', 'media', 'comments', 'obituaries', 'videos'],
-  AUTHOR: ['dashboard', 'articles', 'media', 'obituaries', 'videos'],
+// Permission entry: page access + allowed actions
+export type PagePermission = {
+  access: boolean;
+  actions: Action[];
 };
 
-export type RolePermissions = Record<string, PageId[]>;
+// Full permissions: role -> page -> permission
+export type RolePermissions = Record<string, Record<string, PagePermission>>;
+
+// Legacy format (page ID array) for backward compatibility
+export type LegacyRolePermissions = Record<string, PageId[]>;
 
 export interface CustomRole {
-  name: string;        // e.g. "MODERATOR"
-  label: string;       // e.g. "Moderator"
-  description: string; // e.g. "Can moderate comments and obituaries"
-  color: string;       // e.g. "bg-purple-100 text-purple-700"
+  name: string;
+  label: string;
+  description: string;
+  color: string;
+}
+
+// Default action permissions per built-in role
+const ALL_ACTIONS: Action[] = [...ACTIONS];
+
+export const DEFAULT_PERMISSIONS: RolePermissions = {
+  ADMIN: Object.fromEntries(ALL_PAGES.map((p) => [p.id, { access: true, actions: ALL_ACTIONS }])),
+  EDITOR: Object.fromEntries(ALL_PAGES.map((p) => {
+    const editorPages = ['dashboard', 'articles', 'categories', 'tags', 'media', 'comments', 'obituaries', 'videos'];
+    const hasAccess = editorPages.includes(p.id);
+    return [p.id, { access: hasAccess, actions: hasAccess ? ALL_ACTIONS : [] }];
+  })),
+  AUTHOR: Object.fromEntries(ALL_PAGES.map((p) => {
+    const authorPages = ['dashboard', 'articles', 'media', 'obituaries', 'videos'];
+    const hasAccess = authorPages.includes(p.id);
+    // Authors can create/edit but not delete or publish
+    return [p.id, { access: hasAccess, actions: hasAccess ? ['view', 'create', 'edit'] : [] }];
+  })),
+};
+
+/**
+ * Convert legacy format (string array) to new format
+ */
+export function normalizeLegacyPermissions(legacy: LegacyRolePermissions): RolePermissions {
+  const result: RolePermissions = {};
+  for (const [role, pageIds] of Object.entries(legacy)) {
+    result[role] = {};
+    for (const page of ALL_PAGES) {
+      const hasAccess = pageIds.includes(page.id);
+      result[role][page.id] = { access: hasAccess, actions: hasAccess ? ALL_ACTIONS : [] };
+    }
+  }
+  return result;
+}
+
+/**
+ * Parse permissions from stored JSON — handles both legacy and new format
+ */
+export function parsePermissions(raw: string): RolePermissions {
+  const parsed = JSON.parse(raw);
+  // Check if it's legacy format (values are arrays of strings)
+  const firstValue = Object.values(parsed)[0];
+  if (Array.isArray(firstValue)) {
+    return normalizeLegacyPermissions(parsed as LegacyRolePermissions);
+  }
+  return parsed as RolePermissions;
 }
 
 /**
@@ -41,8 +94,23 @@ export interface CustomRole {
  */
 export function hasPageAccess(role: string, pageId: PageId, permissions: RolePermissions): boolean {
   if (role === 'ADMIN') return true;
-  const rolePerms = permissions[role] || DEFAULT_PERMISSIONS[role] || [];
-  return rolePerms.includes(pageId);
+  const rolePerm = permissions[role]?.[pageId];
+  if (rolePerm) return rolePerm.access;
+  // Fallback to defaults
+  const defaultPerm = DEFAULT_PERMISSIONS[role]?.[pageId];
+  return defaultPerm?.access ?? false;
+}
+
+/**
+ * Check if a role can perform a specific action on a page
+ */
+export function hasActionAccess(role: string, pageId: PageId, action: Action, permissions: RolePermissions): boolean {
+  if (role === 'ADMIN') return true;
+  if (!hasPageAccess(role, pageId, permissions)) return false;
+  const rolePerm = permissions[role]?.[pageId];
+  if (rolePerm) return rolePerm.actions.includes(action);
+  const defaultPerm = DEFAULT_PERMISSIONS[role]?.[pageId];
+  return defaultPerm?.actions.includes(action) ?? false;
 }
 
 /**

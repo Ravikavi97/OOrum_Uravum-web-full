@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+﻿import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
@@ -8,10 +8,11 @@ import { invalidateByTags } from '../lib/cache';
 import { generateUniqueSlug } from '../lib/slug';
 import { revalidateFrontend } from '../lib/revalidate';
 import { createAdminNotification } from '../lib/notify';
+import { encryptImage, safeDecryptImage } from '../lib/imageEncryption';
 
 const router = Router();
 
-// ─── Zod Schemas ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Zod Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const createObituarySchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -33,14 +34,14 @@ const updateObituarySchema = z.object({
   publishedAt: z.string().datetime().optional(),
 });
 
-// ─── Multer setup ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Multer setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// ─── Public submission rate limiter: 3 per hour per IP ───────────────────────
+// â”€â”€â”€ Public submission rate limiter: 3 per hour per IP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const submitRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -54,7 +55,7 @@ const submitRateLimiter = rateLimit({
   },
 });
 
-// ─── GET / — List obituaries (public: approved only; admin: all with status filter) ──
+// â”€â”€â”€ GET / â€” List obituaries (public: approved only; admin: all with status filter) â”€â”€
 
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -90,7 +91,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// ─── GET /slug/:slug — Get obituary by slug ─────────────────────────────────
+// â”€â”€â”€ GET /slug/:slug â€” Get obituary by slug â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 router.get('/slug/:slug', async (req: Request, res: Response) => {
   try {
@@ -111,7 +112,7 @@ router.get('/slug/:slug', async (req: Request, res: Response) => {
   }
 });
 
-// ─── GET /:id/image — Serve obituary image ──────────────────────────────────
+// â”€â”€â”€ GET /:id/image â€” Serve obituary image â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 router.get('/:id/image', async (req: Request, res: Response) => {
   try {
@@ -123,16 +124,17 @@ router.get('/:id/image', async (req: Request, res: Response) => {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Image not found' } });
       return;
     }
+    const decryptedBytes = safeDecryptImage(obit.imageData);
     res.setHeader('Content-Type', 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.send(Buffer.from(obit.imageData));
+    res.send(decryptedBytes);
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch image' } });
   }
 });
 
-// ─── POST /submit — Public obituary submission (no auth required) ────────────
+// â”€â”€â”€ POST /submit â€” Public obituary submission (no auth required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 router.post(
   '/submit',
@@ -172,7 +174,7 @@ router.post(
           submitterName,
           submitterEmail,
           publishedAt: new Date(),
-          ...(req.file && { imageData: new Uint8Array(req.file.buffer) }),
+          ...(req.file && { imageData: encryptImage(req.file.buffer) }),
         },
         select: { id: true, name: true, slug: true, status: true, createdAt: true },
       });
@@ -180,7 +182,7 @@ router.post(
       // Create admin notification
       createAdminNotification({
         type: 'obituary_submission',
-        title: 'புதிய இரங்கல் சமர்ப்பிப்பு',
+        title: 'à®ªà¯à®¤à®¿à®¯ à®‡à®°à®™à¯à®•à®²à¯ à®šà®®à®°à¯à®ªà¯à®ªà®¿à®ªà¯à®ªà¯',
         message: `${submitterName} submitted an obituary for "${name}"`,
         link: '/obituaries',
       });
@@ -193,7 +195,7 @@ router.post(
   },
 );
 
-// ─── POST / — Create obituary (Admin/Editor — auto-approved) ────────────────
+// â”€â”€â”€ POST / â€” Create obituary (Admin/Editor â€” auto-approved) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 router.post(
   '/',
@@ -230,7 +232,7 @@ router.post(
           name, slug, content,
           status: 'APPROVED',
           publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
-          ...(req.file && { imageData: new Uint8Array(req.file.buffer) }),
+          ...(req.file && { imageData: encryptImage(req.file.buffer) }),
         },
         select: { id: true, name: true, slug: true, content: true, status: true, publishedAt: true, createdAt: true },
       });
@@ -245,7 +247,7 @@ router.post(
   },
 );
 
-// ─── PUT /:id — Update obituary (Admin/Editor — includes approve/reject) ────
+// â”€â”€â”€ PUT /:id â€” Update obituary (Admin/Editor â€” includes approve/reject) â”€â”€â”€â”€
 
 router.put(
   '/:id',
@@ -290,7 +292,7 @@ router.put(
           ...(content !== undefined && { content }),
           ...(status !== undefined && { status }),
           ...(publishedAt !== undefined && { publishedAt: new Date(publishedAt) }),
-          ...(req.file && { imageData: new Uint8Array(req.file.buffer) }),
+          ...(req.file && { imageData: encryptImage(req.file.buffer) }),
         },
         select: { id: true, name: true, slug: true, content: true, status: true, publishedAt: true, createdAt: true },
       });
@@ -305,7 +307,7 @@ router.put(
   },
 );
 
-// ─── DELETE /:id ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ DELETE /:id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 router.delete(
   '/:id',
@@ -331,3 +333,4 @@ router.delete(
 );
 
 export default router;
+

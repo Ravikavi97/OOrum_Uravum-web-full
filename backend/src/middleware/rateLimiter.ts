@@ -2,29 +2,19 @@ import rateLimit from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../lib/auth';
 
-// ─── Shared 429 handler ──────────────────────────────────────────────────────
-
 function rateLimitHandler(_req: Request, res: Response): void {
   res.status(429).json({
-    error: {
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: 'Too many requests. Please try again later.',
-    },
+    error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.' },
   });
 }
-
-// ─── Public rate limiter: 100 req/min per IP ─────────────────────────────────
 
 export const publicRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 100,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  keyGenerator: (req: Request) => req.ip ?? 'unknown',
   handler: rateLimitHandler,
 });
-
-// ─── Authenticated rate limiter: 30 req/min per user ─────────────────────────
 
 export const authRateLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -37,8 +27,6 @@ export const authRateLimiter = rateLimit({
   },
   handler: rateLimitHandler,
 });
-
-// ─── Upload rate limiter: 50 uploads per hour per user ───────────────────────
 
 export const uploadRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
 import { uploadRateLimiter } from '../middleware/rateLimiter';
+import { encryptImage, safeDecryptImage } from '../lib/imageEncryption';
 
 const router = Router();
 
@@ -145,8 +146,9 @@ router.post(
         urls[variant.name] = `/uploads/${variant.name}/${variantFilename}`;
       }
 
-      // Create Media record in DB
+      // Create Media record in DB — also store encrypted image bytes in DB
       const articleId = req.body?.articleId || null;
+      const encryptedData = encryptImage(file.buffer);
 
       const media = await prisma.media.create({
         data: {
@@ -157,6 +159,7 @@ router.post(
           largeUrl: urls.large,
           mimeType: file.mimetype,
           size: file.size,
+          imageData: encryptedData,
           articleId,
         },
       });
@@ -189,10 +192,13 @@ router.get('/:id/image', async (req: Request, res: Response) => {
       return;
     }
 
+    // Decrypt image bytes before serving
+    const decryptedBytes = safeDecryptImage(media.imageData);
+
     res.set('Content-Type', media.mimeType);
     res.set('Cache-Control', 'public, max-age=86400');
     res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.send(Buffer.from(media.imageData));
+    res.send(decryptedBytes);
   } catch (err) {
     console.error('[media] GET /:id/image error:', err);
     res.status(500).json({

@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "nodemon",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node app.js",
+    "postinstall": "npx prisma generate --schema=./prisma/schema.prisma",
     "test": "vitest --run"
   },
   "keywords": [],
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.10.1",
+    "prisma": "^6.10.1",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

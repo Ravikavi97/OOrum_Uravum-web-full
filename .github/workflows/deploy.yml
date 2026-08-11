@@ -1,0 +1,448 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+# Cancel in-flight runs for the same branch so pushes don't queue up
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────
+  # 1. Detect which services have changed
+  # ──────────────────────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      backend:   ${{ steps.changes.outputs.backend }}
+      frontend:  ${{ steps.changes.outputs.frontend }}
+      dashboard: ${{ steps.changes.outputs.dashboard }}
+      prisma:    ${{ steps.changes.outputs.prisma }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need previous commit to diff
+
+      - name: Detect changed paths
+        id: changes
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          backend=false
+          frontend=false
+          dashboard=false
+          prisma=false
+
+          if echo "$CHANGED" | grep -qE '^(backend/|prisma/)'; then backend=true; fi
+          if echo "$CHANGED" | grep -qE '^prisma/'; then prisma=true; fi
+          if echo "$CHANGED" | grep -qE '^frontend/'; then frontend=true; fi
+          if echo "$CHANGED" | grep -qE '^publisher-dashboard/'; then dashboard=true; fi
+
+          # docker-compose.yml or workflow changes → rebuild everything
+          if echo "$CHANGED" | grep -qE '^(docker-compose\.yml|\.github/)'; then
+            backend=true; frontend=true; dashboard=true
+          fi
+
+          echo "backend=$backend"   >> $GITHUB_OUTPUT
+          echo "frontend=$frontend" >> $GITHUB_OUTPUT
+          echo "dashboard=$dashboard" >> $GITHUB_OUTPUT
+          echo "prisma=$prisma"     >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────────────────────
+  # 2. Build & test backend
+  # ──────────────────────────────────────────────────────────────
+  build-backend:
+    name: Build Backend
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend deps
+        run: npm ci
+        working-directory: backend
+
+      - name: Run tests
+        run: npm test
+        working-directory: backend
+        env:
+          IMAGE_ENCRYPTION_KEY: ${{ secrets.IMAGE_ENCRYPTION_KEY }}
+
+      - name: Compile TypeScript
+        run: npm run build
+        working-directory: backend
+
+      - name: Upload backend dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist/
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────
+  # 3. Build frontend
+  # ──────────────────────────────────────────────────────────────
+  build-frontend:
+    name: Build Frontend
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build Next.js (standalone)
+        run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: |
+            frontend/.next/standalone/
+            frontend/.next/static/
+            frontend/public/
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────
+  # 4. Build publisher dashboard
+  # ──────────────────────────────────────────────────────────────
+  build-dashboard:
+    name: Build Publisher Dashboard
+    needs: detect-changes
+    if: needs.detect-changes.outputs.dashboard == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: publisher-dashboard/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: publisher-dashboard
+
+      - name: Build Next.js (standalone)
+        run: npm run build
+        working-directory: publisher-dashboard
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-build
+          path: |
+            publisher-dashboard/.next/standalone/
+            publisher-dashboard/.next/static/
+            publisher-dashboard/public/
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────
+  # 5. Deploy to CPanel via SSH
+  # ──────────────────────────────────────────────────────────────
+  deploy-cpanel:
+    name: Deploy to CPanel
+    needs: [detect-changes, build-backend, build-frontend, build-dashboard]
+    # Run if at least one service built (use always() + conditional)
+    if: |
+      always() &&
+      !failure() && !cancelled() &&
+      (needs.detect-changes.outputs.backend == 'true' ||
+       needs.detect-changes.outputs.frontend == 'true' ||
+       needs.detect-changes.outputs.dashboard == 'true')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download artifacts (only those that were actually built)
+      - name: Download backend dist
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist/
+
+      - name: Download frontend build
+        if: needs.detect-changes.outputs.frontend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend-artifact/
+
+      - name: Download dashboard build
+        if: needs.detect-changes.outputs.dashboard == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-build
+          path: dashboard-artifact/
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.CPANEL_SSH_KEY }}
+
+      - name: Add CPanel host to known_hosts
+        run: ssh-keyscan -p ${{ secrets.CPANEL_SSH_PORT || 22 }} ${{ secrets.CPANEL_HOST }} >> ~/.ssh/known_hosts
+
+      # ── Deploy backend ─────────────────────────────────────────
+      - name: Deploy backend to CPanel
+        if: needs.detect-changes.outputs.backend == 'true'
+        env:
+          SSH_HOST: ${{ secrets.CPANEL_HOST }}
+          SSH_USER: ${{ secrets.CPANEL_USER }}
+          SSH_PORT: ${{ secrets.CPANEL_SSH_PORT || 22 }}
+          BACKEND_PATH: ${{ secrets.CPANEL_BACKEND_PATH }}   # e.g. /home/user/public_html/api
+        run: |
+          # Package up the backend: dist + prisma + app.js + package.json
+          tar czf backend-deploy.tar.gz \
+            backend/dist/ \
+            prisma/ \
+            backend/app.js \
+            backend/package.json
+
+          # Upload and extract
+          scp -P "$SSH_PORT" backend-deploy.tar.gz "$SSH_USER@$SSH_HOST:/tmp/backend-deploy.tar.gz"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash << 'ENDSSH'
+            set -e
+            BPATH="${BACKEND_PATH}"
+            cd "$BPATH"
+            tar xzf /tmp/backend-deploy.tar.gz --strip-components=0 -C "$BPATH"
+            rm /tmp/backend-deploy.tar.gz
+            echo "Backend files updated"
+          ENDSSH
+
+      - name: Run Prisma migrations on CPanel
+        if: needs.detect-changes.outputs.prisma == 'true'
+        env:
+          SSH_HOST: ${{ secrets.CPANEL_HOST }}
+          SSH_USER: ${{ secrets.CPANEL_USER }}
+          SSH_PORT: ${{ secrets.CPANEL_SSH_PORT || 22 }}
+          BACKEND_PATH: ${{ secrets.CPANEL_BACKEND_PATH }}
+          NODE_BIN: ${{ secrets.CPANEL_NODE_BIN }}   # e.g. /home/user/nodevenv/public_html/api/22/bin/node
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash << 'ENDSSH'
+            set -e
+            cd "${BACKEND_PATH}"
+            "${NODE_BIN}" node_modules/.bin/prisma migrate deploy --schema=./prisma/schema.prisma
+            echo "Migrations applied"
+          ENDSSH
+
+      - name: Restart backend on CPanel
+        if: needs.detect-changes.outputs.backend == 'true'
+        env:
+          SSH_HOST: ${{ secrets.CPANEL_HOST }}
+          SSH_USER: ${{ secrets.CPANEL_USER }}
+          SSH_PORT: ${{ secrets.CPANEL_SSH_PORT || 22 }}
+        run: |
+          # CPanel restarts the Node.js app via touch tmp/restart.txt
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "touch ${CPANEL_BACKEND_PATH}/tmp/restart.txt && echo 'Backend restart triggered'"
+        env:
+          CPANEL_BACKEND_PATH: ${{ secrets.CPANEL_BACKEND_PATH }}
+
+      # ── Deploy frontend ────────────────────────────────────────
+      - name: Deploy frontend to CPanel
+        if: needs.detect-changes.outputs.frontend == 'true'
+        env:
+          SSH_HOST: ${{ secrets.CPANEL_HOST }}
+          SSH_USER: ${{ secrets.CPANEL_USER }}
+          SSH_PORT: ${{ secrets.CPANEL_SSH_PORT || 22 }}
+          FRONTEND_PATH: ${{ secrets.CPANEL_FRONTEND_PATH }}  # e.g. /home/user/public_html/frontend
+        run: |
+          # Pack the standalone + static + public
+          tar czf frontend-deploy.tar.gz -C frontend-artifact .
+
+          scp -P "$SSH_PORT" frontend-deploy.tar.gz "$SSH_USER@$SSH_HOST:/tmp/frontend-deploy.tar.gz"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash << 'ENDSSH'
+            set -e
+            FPATH="${FRONTEND_PATH}"
+            cd "$FPATH"
+            # Preserve node_modules (managed by CPanel), only update app files
+            tar xzf /tmp/frontend-deploy.tar.gz --exclude='node_modules' -C "$FPATH"
+            rm /tmp/frontend-deploy.tar.gz
+            # CPanel restart
+            touch "$FPATH/tmp/restart.txt"
+            echo "Frontend updated and restart triggered"
+          ENDSSH
+
+      # ── Deploy CMS dashboard ───────────────────────────────────
+      - name: Deploy dashboard to CPanel
+        if: needs.detect-changes.outputs.dashboard == 'true'
+        env:
+          SSH_HOST: ${{ secrets.CPANEL_HOST }}
+          SSH_USER: ${{ secrets.CPANEL_USER }}
+          SSH_PORT: ${{ secrets.CPANEL_SSH_PORT || 22 }}
+          CMS_PATH: ${{ secrets.CPANEL_CMS_PATH }}  # e.g. /home/user/public_html/cms
+        run: |
+          tar czf dashboard-deploy.tar.gz -C dashboard-artifact .
+
+          scp -P "$SSH_PORT" dashboard-deploy.tar.gz "$SSH_USER@$SSH_HOST:/tmp/dashboard-deploy.tar.gz"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash << 'ENDSSH'
+            set -e
+            CPATH="${CMS_PATH}"
+            cd "$CPATH"
+            tar xzf /tmp/dashboard-deploy.tar.gz --exclude='node_modules' -C "$CPATH"
+            rm /tmp/dashboard-deploy.tar.gz
+            touch "$CPATH/tmp/restart.txt"
+            echo "Dashboard updated and restart triggered"
+          ENDSSH
+
+  # ──────────────────────────────────────────────────────────────
+  # 6. Deploy to Docker (self-hosted server via SSH + Docker Compose)
+  # ──────────────────────────────────────────────────────────────
+  deploy-docker:
+    name: Deploy to Docker Server
+    needs: [detect-changes, build-backend, build-frontend, build-dashboard]
+    if: |
+      always() &&
+      !failure() && !cancelled() &&
+      (needs.detect-changes.outputs.backend == 'true' ||
+       needs.detect-changes.outputs.frontend == 'true' ||
+       needs.detect-changes.outputs.dashboard == 'true') &&
+      vars.ENABLE_DOCKER_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download backend dist
+        if: needs.detect-changes.outputs.backend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist/
+
+      - name: Download frontend build
+        if: needs.detect-changes.outputs.frontend == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend-artifact/
+
+      - name: Download dashboard build
+        if: needs.detect-changes.outputs.dashboard == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-build
+          path: dashboard-artifact/
+
+      - name: Restore standalone paths
+        run: |
+          if [ -d frontend-artifact/standalone ]; then
+            mkdir -p frontend/.next
+            cp -r frontend-artifact/standalone frontend/.next/standalone
+            cp -r frontend-artifact/static frontend/.next/static
+            cp -r frontend-artifact/public frontend/public
+          fi
+          if [ -d dashboard-artifact/standalone ]; then
+            mkdir -p publisher-dashboard/.next
+            cp -r dashboard-artifact/standalone publisher-dashboard/.next/standalone
+            cp -r dashboard-artifact/static publisher-dashboard/.next/static
+            cp -r dashboard-artifact/public publisher-dashboard/public
+          fi
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DOCKER_SSH_KEY }}
+
+      - name: Add Docker server to known_hosts
+        run: ssh-keyscan -p ${{ secrets.DOCKER_SSH_PORT || 22 }} ${{ secrets.DOCKER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync files to Docker server
+        env:
+          SSH_HOST: ${{ secrets.DOCKER_HOST }}
+          SSH_USER: ${{ secrets.DOCKER_USER }}
+          SSH_PORT: ${{ secrets.DOCKER_SSH_PORT || 22 }}
+          DEPLOY_PATH: ${{ secrets.DOCKER_DEPLOY_PATH }}  # e.g. /home/deploy/OOrum_Uravum-web
+        run: |
+          # Sync only the changed build outputs
+          RSYNC_OPTS="-az --delete -e 'ssh -p $SSH_PORT'"
+
+          if [ "${{ needs.detect-changes.outputs.backend }}" == "true" ]; then
+            rsync -az -e "ssh -p $SSH_PORT" \
+              backend/dist/ prisma/ backend/app.js backend/package.json \
+              "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/backend-staging/"
+          fi
+
+          if [ "${{ needs.detect-changes.outputs.frontend }}" == "true" ]; then
+            rsync -az --delete -e "ssh -p $SSH_PORT" \
+              frontend/.next/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/frontend/.next/"
+            rsync -az -e "ssh -p $SSH_PORT" \
+              frontend/public/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/frontend/public/"
+          fi
+
+          if [ "${{ needs.detect-changes.outputs.dashboard }}" == "true" ]; then
+            rsync -az --delete -e "ssh -p $SSH_PORT" \
+              publisher-dashboard/.next/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/publisher-dashboard/.next/"
+            rsync -az -e "ssh -p $SSH_PORT" \
+              publisher-dashboard/public/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/publisher-dashboard/public/"
+          fi
+
+          # Always sync docker-compose.yml and prisma schema
+          rsync -az -e "ssh -p $SSH_PORT" \
+            docker-compose.yml prisma/ \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+
+      - name: Rebuild and restart changed Docker services
+        env:
+          SSH_HOST: ${{ secrets.DOCKER_HOST }}
+          SSH_USER: ${{ secrets.DOCKER_USER }}
+          SSH_PORT: ${{ secrets.DOCKER_SSH_PORT || 22 }}
+          DEPLOY_PATH: ${{ secrets.DOCKER_DEPLOY_PATH }}
+          BACKEND_CHANGED: ${{ needs.detect-changes.outputs.backend }}
+          FRONTEND_CHANGED: ${{ needs.detect-changes.outputs.frontend }}
+          DASHBOARD_CHANGED: ${{ needs.detect-changes.outputs.dashboard }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash << 'ENDSSH'
+            set -e
+            cd "${DEPLOY_PATH}"
+
+            # Move staged backend files into place
+            if [ "$BACKEND_CHANGED" == "true" ] && [ -d backend-staging ]; then
+              rm -rf backend/dist backend/app.js backend/package.json
+              cp -r backend-staging/dist backend/dist
+              cp backend-staging/app.js backend/app.js 2>/dev/null || true
+              cp backend-staging/package.json backend/package.json
+            fi
+
+            # Determine which services need rebuilding
+            SERVICES=""
+            [ "$BACKEND_CHANGED" == "true" ]   && SERVICES="$SERVICES backend"
+            [ "$FRONTEND_CHANGED" == "true" ]  && SERVICES="$SERVICES frontend"
+            [ "$DASHBOARD_CHANGED" == "true" ] && SERVICES="$SERVICES publisher-dashboard"
+
+            echo "Restarting services: $SERVICES"
+            docker compose up -d --build $SERVICES
+            docker compose ps
+          ENDSSH

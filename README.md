@@ -205,6 +205,7 @@ docker compose exec backend node seed-admin.js
 │   │   ├── lib/
 │   │   │   ├── auth.ts        # JWT helpers, middleware
 │   │   │   ├── cache.ts       # In-memory cache with tags
+│   │   │   ├── imageEncryption.ts # AES-256-CBC image encrypt/decrypt
 │   │   │   ├── prisma.ts      # Prisma client singleton
 │   │   │   ├── revalidate.ts  # Frontend cache revalidation
 │   │   │   ├── serializer.ts  # Response serialization
@@ -350,7 +351,8 @@ Key models in `prisma/schema.prisma`:
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | /api/media | Yes | List all media |
-| POST | /api/media/upload | Yes | Upload image (multipart, field: "file") |
+| POST | /api/media/upload | Yes | Upload image (multipart, field: "file") — encrypts to DB |
+| GET | /api/media/:id/image | No | Serve decrypted image from DB |
 | DELETE | /api/media/:id | Yes (Admin/Editor) | Delete media and files |
 
 ### Comments
@@ -408,6 +410,7 @@ Key models in `prisma/schema.prisma`:
 | CORS_ORIGIN | Comma-separated allowed origins | http://localhost:3000 |
 | JWT_SECRET | Access token signing secret | — |
 | JWT_REFRESH_SECRET | Refresh token signing secret | — |
+| IMAGE_ENCRYPTION_KEY | **32-char AES-256 key for image encryption** | — |
 | MEDIA_UPLOAD_PATH | Upload directory path | ./uploads |
 | FRONTEND_REVALIDATE_URL | Frontend revalidation endpoint | — |
 | REVALIDATE_SECRET | Shared secret for revalidation | — |
@@ -484,7 +487,130 @@ docker compose down
 docker compose down -v
 ```
 
+## Image Encryption
+
+All uploaded images are encrypted at rest using **AES-256-CBC** before being stored in the database.
+
+### How it works
+
+- **Upload**: image bytes are encrypted with a random IV before writing to the `imageData` DB column
+- **Serve**: the `/api/media/:id/image` and `/api/obituaries/:id/image` endpoints decrypt the bytes transparently before sending to the browser
+- **Format**: `[4-byte IV-length header][16-byte random IV][AES-256-CBC encrypted data]`
+- **Backward compatible**: `safeDecryptImage()` detects legacy unencrypted blobs and returns them raw
+
+### Configuration
+
+Set `IMAGE_ENCRYPTION_KEY` to exactly 32 characters in your environment:
+
+```bash
+# Generate a strong key (run once, store safely — never change it)
+node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
+```
+
+**Docker** (`docker-compose.yml`):
+```yaml
+IMAGE_ENCRYPTION_KEY: your-32-char-key-goes-here!!!!!
+```
+
+**CPanel** — add to Node.js App environment variables:
+```
+IMAGE_ENCRYPTION_KEY = your-32-char-key-goes-here!!!!!
+```
+
+> **Critical:** The encryption key must never change after images are stored. If it changes, all existing encrypted images become unreadable. Store it in a password manager.
+
+### Verify encryption is working
+
+After uploading an image, check the raw DB value — it should be binary, not a readable JPEG/PNG:
+
+```sql
+-- Run inside the MariaDB container or CPanel DB
+SELECT id, LENGTH(imageData), HEX(SUBSTR(imageData, 1, 8)) as header_hex
+FROM Media
+LIMIT 5;
+```
+
+Encrypted images show a non-JPEG header. The first 4 bytes will be `00000010` (IV length = 16 in hex), followed by the random IV. Compare: a raw JPEG starts with `FFD8FFE0`.
+
+You can also test from the browser — the image URL (`/api/media/:id/image`) should display correctly even though the DB blob is unreadable binary.
+
+---
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions to automatically build and deploy only changed services on every push to `main`.
+
+### How change detection works
+
+| Files changed | Services rebuilt |
+|---------------|-----------------|
+| `backend/**` or `prisma/**` | Backend only |
+| `frontend/**` | Frontend only |
+| `publisher-dashboard/**` | Dashboard only |
+| `docker-compose.yml` or `.github/**` | All services |
+
+### Deployment targets
+
+The pipeline supports two deployment targets, both controlled by GitHub Secrets:
+
+| Target | When active |
+|--------|-------------|
+| **CPanel** (always on) | SSH into CPanel, upload build artifacts, touch `tmp/restart.txt` |
+| **Docker server** | Only when repo variable `ENABLE_DOCKER_DEPLOY = true` |
+
+### Required GitHub Secrets
+
+Go to **GitHub → Settings → Secrets and variables → Actions → Secrets** and add:
+
+#### For CPanel deployment
+| Secret | Example | Description |
+|--------|---------|-------------|
+| `CPANEL_HOST` | `cloud620.example.com` | CPanel server hostname |
+| `CPANEL_USER` | `oorumur1` | SSH username |
+| `CPANEL_SSH_KEY` | *(private key PEM)* | SSH private key for the user |
+| `CPANEL_SSH_PORT` | `22` | SSH port (optional, defaults to 22) |
+| `CPANEL_BACKEND_PATH` | `/home/oorumur1/public_html/api` | Absolute path to backend app |
+| `CPANEL_FRONTEND_PATH` | `/home/oorumur1/public_html/frontend` | Absolute path to frontend app |
+| `CPANEL_CMS_PATH` | `/home/oorumur1/public_html/cms` | Absolute path to CMS app |
+| `CPANEL_NODE_BIN` | `/home/oorumur1/nodevenv/public_html/api/22/bin/node` | Node.js binary path |
+| `IMAGE_ENCRYPTION_KEY` | *(32-char key)* | Image encryption key |
+| `NEXT_PUBLIC_API_URL` | `https://api.oorumuravum.com/api` | Public API URL (baked into frontend builds) |
+| `NEXT_PUBLIC_SITE_URL` | `https://oorumuravum.com` | Public site URL |
+
+#### For Docker server deployment (optional)
+| Secret | Description |
+|--------|-------------|
+| `DOCKER_HOST` | Docker server hostname |
+| `DOCKER_USER` | SSH username on Docker server |
+| `DOCKER_SSH_KEY` | SSH private key |
+| `DOCKER_SSH_PORT` | SSH port (optional) |
+| `DOCKER_DEPLOY_PATH` | Path to project on the server |
+
+Set repo variable `ENABLE_DOCKER_DEPLOY = true` under **Settings → Variables** to activate Docker deployment.
+
+### Setting up the SSH key for CPanel
+
+```bash
+# 1. Generate a deploy key (no passphrase)
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/cpanel_deploy_key -N ""
+
+# 2. Copy the public key to CPanel
+#    CPanel → SSH Access → Manage SSH Keys → Import Key → paste .pub content
+#    Then: Authorize the key
+
+# 3. Add the private key content to GitHub Secret CPANEL_SSH_KEY
+cat ~/.ssh/cpanel_deploy_key
+```
+
+### Workflow file
+
+See [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) for the full pipeline.
+
+---
+
 ## Deployment to Production
+
+### Docker Compose (self-hosted server)
 
 1. Get a server with Docker installed (AWS EC2, DigitalOcean, etc.)
 2. Point your domain DNS to the server IP
@@ -504,9 +630,10 @@ SITE_URL: https://yourdomain.com
 JWT_SECRET: <generate-a-strong-random-secret>
 JWT_REFRESH_SECRET: <generate-another-strong-random-secret>
 REVALIDATE_SECRET: <generate-another-secret>
+IMAGE_ENCRYPTION_KEY: <exactly-32-chars-never-change>
 ```
 
-4. Rebuild and deploy:
+4. Build and deploy:
 
 ```bash
 cd frontend && npx next build && cd ..
@@ -516,6 +643,16 @@ docker compose up -d --build
 ```
 
 5. Set up a reverse proxy (nginx/Caddy) with SSL for your domain.
+
+### CPanel (shared hosting)
+
+See `backend/.env.cpanel` for a ready-to-fill production environment template.
+
+Key steps:
+1. Upload `backend/dist/`, `prisma/`, `backend/app.js`, `backend/package.json` to `/public_html/api/`
+2. In CPanel → Setup Node.js App → set `IMAGE_ENCRYPTION_KEY` and other secrets
+3. Run `npm install --omit=dev` then `node node_modules/.bin/prisma migrate deploy`
+4. Build frontend/dashboard locally with production `NEXT_PUBLIC_API_URL` and upload the `.next/standalone` output
 
 ## User Roles
 

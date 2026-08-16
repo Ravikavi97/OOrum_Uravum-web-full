@@ -174,7 +174,8 @@ router.post(
           submitterName,
           submitterEmail,
           publishedAt: new Date(),
-          ...(req.file && { imageData: encryptImage(req.file.buffer) }),
+          // Cast Buffer to Uint8Array<ArrayBuffer> for Prisma v6 Bytes field compatibility
+          ...(req.file && { imageData: encryptImage(req.file.buffer) as unknown as Uint8Array<ArrayBuffer> }),
         },
         select: { id: true, name: true, slug: true, status: true, createdAt: true },
       });
@@ -232,7 +233,8 @@ router.post(
           name, slug, content,
           status: 'APPROVED',
           publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
-          ...(req.file && { imageData: encryptImage(req.file.buffer) }),
+          // Cast Buffer to Uint8Array<ArrayBuffer> for Prisma v6 Bytes field compatibility
+          ...(req.file && { imageData: encryptImage(req.file.buffer) as unknown as Uint8Array<ArrayBuffer> }),
         },
         select: { id: true, name: true, slug: true, content: true, status: true, publishedAt: true, createdAt: true },
       });
@@ -292,7 +294,8 @@ router.put(
           ...(content !== undefined && { content }),
           ...(status !== undefined && { status }),
           ...(publishedAt !== undefined && { publishedAt: new Date(publishedAt) }),
-          ...(req.file && { imageData: encryptImage(req.file.buffer) }),
+          // Cast Buffer to Uint8Array<ArrayBuffer> for Prisma v6 Bytes field compatibility
+          ...(req.file && { imageData: encryptImage(req.file.buffer) as unknown as Uint8Array<ArrayBuffer> }),
         },
         select: { id: true, name: true, slug: true, content: true, status: true, publishedAt: true, createdAt: true },
       });

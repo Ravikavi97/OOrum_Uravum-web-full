@@ -159,7 +159,8 @@ router.post(
           largeUrl: urls.large,
           mimeType: file.mimetype,
           size: file.size,
-          imageData: encryptedData,
+          // Cast Buffer to Uint8Array<ArrayBuffer> for Prisma v6 Bytes field compatibility
+          imageData: encryptedData as unknown as Uint8Array<ArrayBuffer>,
           articleId,
         },
       });

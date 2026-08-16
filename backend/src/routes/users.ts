@@ -75,7 +75,8 @@ router.post(
           role: role ?? 'AUTHOR',
           bio: bio ?? null,
           profileImage: profileImage ?? null,
-          socialLinks: socialLinks ?? null,
+          // Prisma v6: nullable JSON field requires Prisma.JsonNull instead of null
+          socialLinks: socialLinks === undefined ? undefined : (socialLinks === null ? Prisma.JsonNull : socialLinks),
         },
         select: {
           id: true, email: true, name: true, slug: true, role: true,
@@ -192,7 +193,7 @@ router.put(
           ...(role !== undefined && { role }),
           ...(bio !== undefined && { bio }),
           ...(profileImage !== undefined && { profileImage }),
-          ...(socialLinks !== undefined && { socialLinks: socialLinks === null ? null : socialLinks }),
+          ...(socialLinks !== undefined && { socialLinks: socialLinks === null ? Prisma.JsonNull : socialLinks }),
         },
         select: {
           id: true, email: true, name: true, slug: true, role: true,

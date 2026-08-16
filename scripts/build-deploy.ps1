@@ -179,9 +179,9 @@ if ($doBackend) {
     }
 
     # Copy generated Prisma client
-    $destModules = Join-Path $BE_DEST "node_modules"
-    $prismaClient    = Join-Path $BE_SRC "node_modules" ".prisma"
-    $prismaClientAt  = Join-Path $BE_SRC "node_modules" "@prisma"
+    $destModules    = Join-Path $BE_DEST "node_modules"
+    $prismaClient   = Join-Path (Join-Path $BE_SRC "node_modules") ".prisma"
+    $prismaClientAt = Join-Path (Join-Path $BE_SRC "node_modules") "@prisma"
     if (Test-Path $prismaClient) {
         New-Item -ItemType Directory -Path $destModules -Force | Out-Null
         Copy-Item $prismaClient (Join-Path $destModules ".prisma") -Recurse
@@ -242,9 +242,11 @@ if ($doCms) {
 
     # Copy standalone output
     Write-Step "cms: copying standalone output"
-    $standaloneSrc = Join-Path $CMS_SRC ".next" "standalone" "publisher-dashboard"
+    $nextDir       = Join-Path $CMS_SRC ".next"
+    $standaloneDir = Join-Path $nextDir "standalone"
+    $standaloneSrc = Join-Path $standaloneDir "publisher-dashboard"
     if (-not (Test-Path $standaloneSrc)) {
-        $standaloneSrc = Join-Path $CMS_SRC ".next" "standalone"
+        $standaloneSrc = $standaloneDir
     }
     if (-not (Test-Path $standaloneSrc)) {
         throw "CMS standalone output not found at $standaloneSrc. Ensure next.config.js has output: 'standalone'"
@@ -255,9 +257,9 @@ if ($doCms) {
     Write-Ok "Standalone files copied"
 
     # Copy .next/static (not included in standalone)
-    $staticSrc = Join-Path $CMS_SRC ".next" "static"
+    $staticSrc  = Join-Path (Join-Path $CMS_SRC ".next") "static"
     if (Test-Path $staticSrc) {
-        $staticDest = Join-Path $CMS_DEST ".next" "static"
+        $staticDest = Join-Path (Join-Path $CMS_DEST ".next") "static"
         New-Item -ItemType Directory -Path $staticDest -Force | Out-Null
         Copy-Item $staticSrc $staticDest -Recurse -Force
         Write-Ok ".next/static copied"
@@ -273,7 +275,7 @@ if ($doCms) {
     # Fix Windows paths in server.js and required-server-files.json
     Write-Step "cms: fixing Windows paths"
     Fix-WindowsPaths (Join-Path $CMS_DEST "server.js") "publisher-dashboard"
-    Fix-WindowsPaths (Join-Path $CMS_DEST ".next" "required-server-files.json") "publisher-dashboard"
+    Fix-WindowsPaths (Join-Path (Join-Path $CMS_DEST ".next") "required-server-files.json") "publisher-dashboard"
     Write-Ok "Windows paths fixed"
 
     # Rename node_modules -> _modules
@@ -361,9 +363,11 @@ if ($doFrontend) {
 
     # Copy standalone output
     Write-Step "frontend: copying standalone output"
-    $standaloneSrc = Join-Path $FE_SRC ".next" "standalone" "frontend"
+    $nextDir       = Join-Path $FE_SRC ".next"
+    $standaloneDir = Join-Path $nextDir "standalone"
+    $standaloneSrc = Join-Path $standaloneDir "frontend"
     if (-not (Test-Path $standaloneSrc)) {
-        $standaloneSrc = Join-Path $FE_SRC ".next" "standalone"
+        $standaloneSrc = $standaloneDir
     }
     if (-not (Test-Path $standaloneSrc)) {
         throw "Frontend standalone output not found at $standaloneSrc. Ensure next.config.js has output: 'standalone'"
@@ -374,9 +378,9 @@ if ($doFrontend) {
     Write-Ok "Standalone files copied"
 
     # Copy .next/static (not included in standalone)
-    $staticSrc = Join-Path $FE_SRC ".next" "static"
+    $staticSrc  = Join-Path (Join-Path $FE_SRC ".next") "static"
     if (Test-Path $staticSrc) {
-        $staticDest = Join-Path $FE_DEST ".next" "static"
+        $staticDest = Join-Path (Join-Path $FE_DEST ".next") "static"
         New-Item -ItemType Directory -Path $staticDest -Force | Out-Null
         Copy-Item $staticSrc $staticDest -Recurse -Force
         Write-Ok ".next/static copied"
@@ -392,7 +396,7 @@ if ($doFrontend) {
     # Fix Windows paths
     Write-Step "frontend: fixing Windows paths"
     Fix-WindowsPaths (Join-Path $FE_DEST "server.js") "frontend"
-    Fix-WindowsPaths (Join-Path $FE_DEST ".next" "required-server-files.json") "frontend"
+    Fix-WindowsPaths (Join-Path (Join-Path $FE_DEST ".next") "required-server-files.json") "frontend"
     Write-Ok "Windows paths fixed"
 
     # IMPORTANT: Remove app.js - Passenger loads it instead of server.js

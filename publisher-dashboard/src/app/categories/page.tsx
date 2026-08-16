@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError } from '@/lib/api';
-
+import { ToastContainer, useToast } from '@/components/Toast';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ParentCategory {
@@ -26,6 +26,7 @@ interface Category {
 
 export default function CategoriesPage() {
   const { token, hasRole } = useAuth();
+  const { toasts, showToast, dismiss } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState('');
@@ -109,6 +110,7 @@ export default function CategoriesPage() {
       }
       resetForm();
       fetchCategories();
+      showToast(editingId ? 'Category updated' : 'Category created');
     } catch (err) {
       if (err instanceof AdminApiError) {
         setFormError(err.message);
@@ -131,6 +133,7 @@ export default function CategoriesPage() {
         method: 'DELETE',
       });
       fetchCategories();
+      showToast('Category deleted');
     } catch (err) {
       if (err instanceof AdminApiError && err.code === 'HAS_ARTICLES') {
         setDeleteError(err.message);
@@ -146,6 +149,7 @@ export default function CategoriesPage() {
 
   return (
     <div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Categories</h1>

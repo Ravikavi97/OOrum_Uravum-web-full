@@ -5,7 +5,7 @@ import { getVideoBySlug, getVideoPosts, ApiRequestError } from "@/services/api";
 import type { VideoPost } from "@/services/api";
 import ShareButtons from "@/components/ui/ShareButtons";
 
-export const revalidate = 60;
+export const revalidate = 10;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 function getEmbedUrl(videoUrl: string): string {

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError } from '@/lib/api';
+import { ToastContainer, useToast } from '@/components/Toast';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ interface Tag {
 
 export default function TagsPage() {
   const { token, hasRole } = useAuth();
+  const { toasts, showToast, dismiss } = useToast();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState('');
@@ -70,6 +72,7 @@ export default function TagsPage() {
       setName('');
       setShowForm(false);
       fetchTags();
+      showToast('Tag created');
     } catch (err) {
       setFormError(err instanceof AdminApiError ? err.message : 'Network error');
     } finally {
@@ -103,6 +106,7 @@ export default function TagsPage() {
       });
       cancelEditing();
       fetchTags();
+      showToast('Tag updated');
     } catch (err) {
       setEditError(err instanceof AdminApiError ? err.message : 'Failed to save');
     } finally {
@@ -130,6 +134,7 @@ export default function TagsPage() {
         method: 'DELETE',
       });
       fetchTags();
+      showToast('Tag deleted');
     } catch (err) {
       setDeleteError(err instanceof AdminApiError ? err.message : 'Failed to delete tag');
     }
@@ -139,6 +144,7 @@ export default function TagsPage() {
 
   return (
     <div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Tags</h1>

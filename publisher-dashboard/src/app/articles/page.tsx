@@ -5,6 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { adminFetch, AdminApiError, toQueryString } from '@/lib/api';
 import RichTextEditor from '@/components/RichTextEditor';
+import ImageUploadField from '@/components/ImageUploadField';
+import { ToastContainer, useToast } from '@/components/Toast';
 
 const UPLOADS_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/api$/, '');
 
@@ -73,6 +75,7 @@ interface FieldErrors {
 export default function ArticlesPage() {
   const { token, user } = useAuth();
   const { canAction } = usePermissions();
+  const { toasts, showToast, dismiss } = useToast();
 
   // List state
   const [articles, setArticles] = useState<PaginatedArticles | null>(null);
@@ -80,6 +83,11 @@ export default function ArticlesPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState('');
+
+  // Delete state
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteTitle, setDeleteTitle] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -97,9 +105,7 @@ export default function ArticlesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Image upload state
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Dropdown data
   const [categories, setCategories] = useState<Category[]>([]);
@@ -190,8 +196,6 @@ export default function ArticlesPage() {
     setFormError('');
     setFieldErrors({});
     setShowForm(false);
-    setImagePreview(null);
-    if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   const openEditForm = (article: Article) => {
@@ -207,38 +211,6 @@ export default function ArticlesPage() {
     setFormError('');
     setFieldErrors({});
     setShowForm(true);
-    setImagePreview(article.featuredImage || null);
-  };
-
-  // ─── Image upload handler ─────────────────────────────────────────────────
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Show local preview immediately
-    setImagePreview(URL.createObjectURL(file));
-    setUploadingImage(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const media = await adminFetch<{ originalUrl: string; mediumUrl: string | null }>('/media/upload', {
-        token: token!,
-        method: 'POST',
-        body: formData,
-      });
-      // Store the full URL so the frontend can display it
-      const imageUrl = `${UPLOADS_BASE}${media.mediumUrl || media.originalUrl}`;
-      setFormFeaturedImage(imageUrl);
-      setImagePreview(imageUrl);
-    } catch (err) {
-      setFormError(err instanceof AdminApiError ? err.message : 'Image upload failed');
-      setImagePreview(null);
-      setFormFeaturedImage('');
-    } finally {
-      setUploadingImage(false);
-    }
   };
 
   // ─── Submit handler ──────────────────────────────────────────────────────
@@ -262,20 +234,32 @@ export default function ArticlesPage() {
 
     try {
       if (editingId) {
-        await adminFetch(`/articles/${editingId}`, {
+        const updated = await adminFetch<Article>(`/articles/${editingId}`, {
           token: token!,
           method: 'PUT',
           body: JSON.stringify(body),
         });
+        // Update local state directly — no re-fetch needed
+        setArticles(prev => prev ? {
+          ...prev,
+          data: prev.data.map(a => a.id === editingId ? updated : a),
+        } : null);
       } else {
-        await adminFetch('/articles', {
+        const created = await adminFetch<Article>('/articles', {
           token: token!,
           method: 'POST',
           body: JSON.stringify(body),
         });
+        // Prepend new article to list
+        setArticles(prev => prev ? {
+          ...prev,
+          data: [created, ...prev.data].slice(0, 10),
+          total: prev.total + 1,
+          totalPages: Math.ceil((prev.total + 1) / 10),
+        } : null);
       }
       resetForm();
-      fetchArticles();
+      showToast(editingId ? 'Article updated successfully' : 'Article created successfully');
     } catch (err) {
       if (err instanceof AdminApiError) {
         setFormError(err.message);
@@ -294,15 +278,60 @@ export default function ArticlesPage() {
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     if (!token) return;
+    // Optimistic update — change status locally first
+    setArticles(prev => prev ? {
+      ...prev,
+      data: prev.data.map(a => a.id === id ? { ...a, status: newStatus as Article['status'] } : a),
+    } : null);
     try {
       await adminFetch(`/articles/${id}`, {
         token,
         method: 'PUT',
         body: JSON.stringify({ status: newStatus }),
       });
-      fetchArticles();
+      // No re-fetch needed — local state is already correct
     } catch {
-      // Silently fail — status will revert on next fetch
+      // On error revert by re-fetching
+      fetchArticles();
+      showToast('Failed to update status', 'error');
+    }
+  };
+
+  // ─── Delete article ──────────────────────────────────────────────────────
+
+  const confirmDelete = (article: Article) => {
+    setDeleteId(article.id);
+    setDeleteTitle(article.title);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId || !token) return;
+    setDeleting(true);
+
+    // Optimistic update — remove from local state immediately
+    setArticles(prev => prev ? {
+      ...prev,
+      data: prev.data.filter(a => a.id !== deleteId),
+      total: prev.total - 1,
+      totalPages: Math.max(1, Math.ceil((prev.total - 1) / 10)),
+    } : null);
+    const idToDelete = deleteId;
+    setDeleteId(null);
+    setDeleteTitle('');
+
+    try {
+      await adminFetch(`/articles/${idToDelete}`, {
+        token,
+        method: 'DELETE',
+      });
+      showToast('Article deleted successfully');
+      // No re-fetch — local state is already up-to-date
+    } catch (err) {
+      // Revert optimistic update on error by re-fetching from server
+      fetchArticles();
+      showToast(err instanceof AdminApiError ? err.message : 'Failed to delete article', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -340,17 +369,31 @@ export default function ArticlesPage() {
 
   return (
     <div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Articles</h1>
-        {canAction('articles', 'create') && (
-        <button
-          onClick={() => { resetForm(); setShowForm(true); }}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
-        >
-          + New Article
-        </button>
-        )}
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => fetchArticles()}
+            disabled={loading}
+            className="text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Refresh articles list"
+            title="Refresh"
+          >
+            <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          {canAction('articles', 'create') && (
+          <button
+            onClick={() => { resetForm(); setShowForm(true); }}
+            className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
+          >
+            + New Article
+          </button>
+          )}
+        </div>
       </div>
 
       {/* Status filter tabs */}
@@ -472,82 +515,17 @@ export default function ArticlesPage() {
             )}
           </div>
 
-          {/* Featured image — upload or URL */}
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Featured Image</label>
-            {imagePreview ? (
-              <div className="flex items-start gap-3">
-                <div className="w-32 h-20 rounded-lg overflow-hidden bg-gray-100 border shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  {uploadingImage && <p className="text-xs text-blue-600">Uploading…</p>}
-                  {!uploadingImage && formFeaturedImage && <p className="text-xs text-green-600">✓ Image set</p>}
-                  <button type="button" onClick={() => imageInputRef.current?.click()} className="text-xs text-blue-600 hover:underline">Change image</button>
-                  <button
-                    type="button"
-                    onClick={() => { setImagePreview(null); setFormFeaturedImage(''); if (imageInputRef.current) imageInputRef.current.value = ''; }}
-                    className="text-xs text-red-600 hover:underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {/* Upload option */}
-                <div
-                  onClick={() => imageInputRef.current?.click()}
-                  className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') imageInputRef.current?.click(); }}
-                >
-                  <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
-                  </svg>
-                  <div>
-                    <p className="text-sm text-gray-700">Upload image</p>
-                    <p className="text-xs text-gray-400">JPEG, PNG, WebP or AVIF</p>
-                  </div>
-                </div>
-                {/* OR divider */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-gray-200" />
-                  <span className="text-xs text-gray-400">OR</span>
-                  <div className="flex-1 h-px bg-gray-200" />
-                </div>
-                {/* URL input */}
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={formFeaturedImage}
-                    onChange={(e) => {
-                      setFormFeaturedImage(e.target.value);
-                      setImagePreview(e.target.value || null);
-                    }}
-                    placeholder="Paste image URL (e.g. from Media Library)"
-                    className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  {formFeaturedImage && !imagePreview && (
-                    <button type="button" onClick={() => setImagePreview(formFeaturedImage)} className="text-xs text-blue-600 hover:underline px-2">Preview</button>
-                  )}
-                </div>
-              </div>
-            )}
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              className="hidden"
-              onChange={handleImageUpload}
-              aria-label="Featured image"
-            />
-            {fieldErrors.featuredImage && (
-              <p className="text-red-600 text-xs mt-1">{fieldErrors.featuredImage.join(', ')}</p>
-            )}
-          </div>
+          {/* Featured image */}
+          <ImageUploadField
+            label="Featured Image"
+            value={formFeaturedImage}
+            onChange={setFormFeaturedImage}
+            onUploadingChange={setUploadingImage}
+            prefer="medium"
+          />
+          {fieldErrors.featuredImage && (
+            <p className="text-red-600 text-xs mt-1">{fieldErrors.featuredImage.join(', ')}</p>
+          )}
 
           {/* Breaking news toggle + Status */}
           <div className="flex items-center gap-6">
@@ -577,10 +555,10 @@ export default function ArticlesPage() {
           <div className="flex gap-2">
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || uploadingImage}
               className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
             >
-              {submitting ? 'Saving…' : 'Save'}
+              {uploadingImage ? 'Uploading image…' : submitting ? 'Saving…' : 'Save'}
             </button>
             <button
               type="button"
@@ -646,14 +624,25 @@ export default function ArticlesPage() {
                       {new Date(a.updatedAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-2">
-                      {canEditArticle(a) && canAction('articles', 'edit') && (
-                        <button
-                          onClick={() => openEditForm(a)}
-                          className="text-blue-600 hover:underline text-xs"
-                        >
-                          Edit
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {canEditArticle(a) && canAction('articles', 'edit') && (
+                          <button
+                            onClick={() => openEditForm(a)}
+                            className="text-blue-600 hover:underline text-xs"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {canAction('articles', 'delete') && (
+                          <button
+                            onClick={() => confirmDelete(a)}
+                            className="text-red-500 hover:underline text-xs"
+                            aria-label={`Delete ${a.title}`}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -684,6 +673,64 @@ export default function ArticlesPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteId && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => !deleting && setDeleteId(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-red-100">
+              <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 id="delete-modal-title" className="text-lg font-bold text-gray-900 text-center mb-2">
+              Delete Article?
+            </h3>
+            <p className="text-sm text-gray-500 text-center mb-1">
+              You are about to permanently delete:
+            </p>
+            <p className="text-sm font-medium text-gray-800 text-center mb-6 line-clamp-2 px-2">
+              &ldquo;{deleteTitle}&rdquo;
+            </p>
+            <p className="text-xs text-red-600 text-center mb-6 bg-red-50 rounded-lg p-2">
+              ⚠ This cannot be undone. The article will be permanently removed from the database.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteId(null)}
+                disabled={deleting}
+                className="flex-1 bg-gray-100 text-gray-700 px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Deleting…
+                  </>
+                ) : 'Delete Article'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

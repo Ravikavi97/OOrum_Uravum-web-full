@@ -3,7 +3,7 @@ import { getArticles, getTags } from "@/services/api";
 import ArticleCard from "@/components/article/ArticleCard";
 import Pagination from "@/components/ui/Pagination";
 
-export const revalidate = 60;
+export const revalidate = 10;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

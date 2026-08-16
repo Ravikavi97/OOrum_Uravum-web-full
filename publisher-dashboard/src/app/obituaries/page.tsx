@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError, toQueryString } from '@/lib/api';
+import ImageUploadField from '@/components/ImageUploadField';
+import { ToastContainer, useToast } from '@/components/Toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -40,6 +42,7 @@ function toDateInputValue(iso: string): string {
 
 export default function ObituariesPage() {
   const { token } = useAuth();
+  const { toasts, showToast, dismiss } = useToast();
   const [obituaries, setObituaries] = useState<Obituary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,7 +60,8 @@ export default function ObituariesPage() {
   const [publishedAt, setPublishedAt] = useState('');
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const fetchObituaries = useCallback(async () => {
@@ -91,14 +95,14 @@ export default function ObituariesPage() {
 
   const resetForm = () => {
     setName(''); setContent(''); setPublishedAt(''); setEditingId(null);
-    setFormError(''); setShowForm(false); setImagePreview(null);
+    setFormError(''); setShowForm(false); setImageUrl('');
     if (fileRef.current) fileRef.current.value = '';
   };
 
   const openEdit = (o: Obituary) => {
     setEditingId(o.id); setName(o.name); setContent(o.content);
     setPublishedAt(toDateInputValue(o.publishedAt)); setFormError('');
-    setShowForm(true); setImagePreview(`${API_URL}/obituaries/${o.id}/image`);
+    setShowForm(true); setImageUrl(`${API_URL}/obituaries/${o.id}/image`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,13 +111,12 @@ export default function ObituariesPage() {
       const fd = new FormData();
       fd.append('name', name); fd.append('content', content);
       if (publishedAt) fd.append('publishedAt', new Date(publishedAt).toISOString());
-      const file = fileRef.current?.files?.[0];
-      if (file) fd.append('image', file);
 
       const url = editingId ? `${API_URL}/obituaries/${editingId}` : `${API_URL}/obituaries`;
       const res = await fetch(url, { method: editingId ? 'PUT' : 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
       if (!res.ok) { const err = await res.json().catch(() => ({})); setFormError(err.error?.message || 'Failed'); return; }
       resetForm(); fetchObituaries();
+      showToast(editingId ? 'Obituary updated successfully' : 'Obituary created successfully');
     } catch { setFormError('Network error'); }
     finally { setSubmitting(false); }
   };
@@ -122,12 +125,13 @@ export default function ObituariesPage() {
     try {
       await adminFetch(`/obituaries/${id}`, { token: token!, method: 'PUT', body: JSON.stringify({ status }) });
       fetchObituaries();
+      showToast(`Obituary ${status.toLowerCase()}`);
     } catch { /* silent */ }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this obituary?')) return;
-    try { await adminFetch(`/obituaries/${id}`, { token: token!, method: 'DELETE' }); fetchObituaries(); }
+    try { await adminFetch(`/obituaries/${id}`, { token: token!, method: 'DELETE' }); fetchObituaries(); showToast('Obituary deleted'); }
     catch { setError('Failed to delete'); }
   };
 
@@ -142,6 +146,7 @@ export default function ObituariesPage() {
 
   return (
     <div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold">Obituaries</h1>
@@ -179,30 +184,16 @@ export default function ObituariesPage() {
           {formError && <p className="text-red-600 text-sm">{formError}</p>}
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" required className="w-full border rounded px-3 py-2 text-sm" />
           <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Content" required rows={4} className="w-full border rounded px-3 py-2 text-sm" />
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Image</label>
-            {imagePreview ? (
-              <div className="flex items-start gap-3">
-                <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-blue-600 hover:underline">Change</button>
-                  <button type="button" onClick={() => { setImagePreview(null); if (fileRef.current) fileRef.current.value = ''; }} className="text-xs text-red-600 hover:underline">Remove</button>
-                </div>
-              </div>
-            ) : (
-              <div onClick={() => fileRef.current?.click()} className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') fileRef.current?.click(); }}>
-                <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" /></svg>
-                <span className="text-xs text-gray-500">Upload image</span>
-              </div>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setImagePreview(URL.createObjectURL(f)); }} />
-          </div>
+          <ImageUploadField
+            label="Image"
+            value={imageUrl}
+            onChange={setImageUrl}
+            onUploadingChange={setUploadingImage}
+            prefer="medium"
+          />
           <input type="datetime-local" value={publishedAt} onChange={(e) => setPublishedAt(e.target.value)} className="border rounded px-3 py-2 text-sm" />
           <div className="flex gap-2">
-            <button type="submit" disabled={submitting} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">{submitting ? 'Saving…' : 'Save'}</button>
+            <button type="submit" disabled={submitting || uploadingImage} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">{uploadingImage ? 'Uploading image…' : submitting ? 'Saving…' : 'Save'}</button>
             <button type="button" onClick={resetForm} className="bg-gray-200 px-4 py-2 rounded text-sm">Cancel</button>
           </div>
         </form>

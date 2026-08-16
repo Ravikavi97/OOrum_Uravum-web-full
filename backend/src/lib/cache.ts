@@ -2,7 +2,7 @@
 // Same API as the previous Redis-based implementation.
 
 // TTL constants (in seconds)
-export const ARTICLE_TTL = 300;
+export const ARTICLE_TTL = 5;   // short TTL — CMS mutations invalidate immediately; stale window ≤ 5s
 export const CATEGORY_TTL = 600;
 export const TAG_TTL = 600;
 export const BREAKING_TTL = 60;

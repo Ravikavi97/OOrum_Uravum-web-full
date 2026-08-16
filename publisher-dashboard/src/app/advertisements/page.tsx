@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError } from '@/lib/api';
+import ImageUploadField from '@/components/ImageUploadField';
+import { ToastContainer, useToast } from '@/components/Toast';
 
 const UPLOADS_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/api$/, '');
 
@@ -118,6 +120,7 @@ function ImagePositionTool({
 
 export default function AdvertisementsPage() {
   const { token } = useAuth();
+  const { toasts, showToast, dismiss } = useToast();
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -132,9 +135,7 @@ export default function AdvertisementsPage() {
   const [active, setActive] = useState(true);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const imgRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const fetchAds = useCallback(async () => {
     if (!token) return;
@@ -151,30 +152,15 @@ export default function AdvertisementsPage() {
   const resetForm = () => {
     setTitle(''); setDescription(''); setImageUrl(''); setLinkUrl('');
     setPosition('sidebar'); setCropPosition('50% 50%'); setActive(true);
-    setEditingId(null); setFormError(''); setShowForm(false); setImagePreview(null);
-    if (imgRef.current) imgRef.current.value = '';
+    setEditingId(null); setFormError(''); setShowForm(false);
   };
 
   const openEdit = (ad: Ad) => {
     setEditingId(ad.id); setTitle(ad.title); setDescription(ad.description || '');
     setImageUrl(ad.imageUrl || ''); setLinkUrl(ad.linkUrl || '');
     setPosition(ad.position); setCropPosition(ad.cropPosition || '50% 50%');
-    setActive(ad.active); setImagePreview(ad.imageUrl || null);
+    setActive(ad.active);
     setFormError(''); setShowForm(true);
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImagePreview(URL.createObjectURL(file));
-    setUploading(true);
-    try {
-      const fd = new FormData(); fd.append('file', file);
-      const media = await adminFetch<{ originalUrl: string; mediumUrl: string | null }>('/media/upload', { token: token!, method: 'POST', body: fd });
-      const url = `${UPLOADS_BASE}${media.mediumUrl || media.originalUrl}`;
-      setImageUrl(url); setImagePreview(url);
-    } catch { setFormError('Image upload failed'); setImagePreview(null); }
-    finally { setUploading(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -195,13 +181,14 @@ export default function AdvertisementsPage() {
         await adminFetch('/ads', { token: token!, method: 'POST', body: JSON.stringify(body) });
       }
       resetForm(); fetchAds();
+      showToast(editingId ? 'Ad updated successfully' : 'Ad created successfully');
     } catch (err) { setFormError(err instanceof AdminApiError ? err.message : 'Failed to save'); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this advertisement?')) return;
-    try { await adminFetch(`/ads/${id}`, { token: token!, method: 'DELETE' }); fetchAds(); }
+    try { await adminFetch(`/ads/${id}`, { token: token!, method: 'DELETE' }); fetchAds(); showToast('Ad deleted'); }
     catch { setError('Failed to delete'); }
   };
 
@@ -214,6 +201,7 @@ export default function AdvertisementsPage() {
 
   return (
     <div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Advertisements</h1>
         <button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">+ New Ad</button>
@@ -245,75 +233,42 @@ export default function AdvertisementsPage() {
 
           {/* Image upload */}
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Ad Image</label>
             {position === 'header' && (
               <p className="text-xs text-blue-600 mb-2 bg-blue-50 px-3 py-1.5 rounded">
                 💡 Header banners display at <strong>728×90px</strong> on desktop. Upload any image and drag to position the visible area.
               </p>
             )}
-            {imagePreview ? (
-              <div className="space-y-4">
-                {/* Drag-to-position crop tool */}
+            <ImageUploadField
+              label="Ad Image"
+              value={imageUrl}
+              onChange={(url) => { setImageUrl(url); }}
+              onUploadingChange={setUploadingImage}
+              prefer="large"
+            />
+            {/* Drag-to-position crop tool — shown after image is set */}
+            {imageUrl && (
+              <div className="mt-4 space-y-3">
                 {position === 'header' && (
                   <div className="space-y-3">
-                    <ImagePositionTool
-                      imageUrl={imagePreview}
-                      cropPosition={cropPosition}
-                      onChange={setCropPosition}
-                      frameWidth={728}
-                      frameHeight={90}
-                      label="Desktop preview (728×90)"
-                    />
-                    <ImagePositionTool
-                      imageUrl={imagePreview}
-                      cropPosition={cropPosition}
-                      onChange={setCropPosition}
-                      frameWidth={360}
-                      frameHeight={60}
-                      label="Mobile preview (360×60)"
-                    />
+                    <ImagePositionTool imageUrl={imageUrl} cropPosition={cropPosition} onChange={setCropPosition} frameWidth={728} frameHeight={90} label="Desktop preview (728×90)" />
+                    <ImagePositionTool imageUrl={imageUrl} cropPosition={cropPosition} onChange={setCropPosition} frameWidth={360} frameHeight={60} label="Mobile preview (360×60)" />
                   </div>
                 )}
                 {position === 'sidebar' && (
-                  <ImagePositionTool
-                    imageUrl={imagePreview}
-                    cropPosition={cropPosition}
-                    onChange={setCropPosition}
-                    frameWidth={300}
-                    frameHeight={250}
-                    label="Sidebar preview (300×250)"
-                  />
+                  <ImagePositionTool imageUrl={imageUrl} cropPosition={cropPosition} onChange={setCropPosition} frameWidth={300} frameHeight={250} label="Sidebar preview (300×250)" />
                 )}
                 {position === 'banner' && (
-                  <ImagePositionTool
-                    imageUrl={imagePreview}
-                    cropPosition={cropPosition}
-                    onChange={setCropPosition}
-                    frameWidth={728}
-                    frameHeight={200}
-                    label="Banner preview (728×200)"
-                  />
+                  <ImagePositionTool imageUrl={imageUrl} cropPosition={cropPosition} onChange={setCropPosition} frameWidth={728} frameHeight={200} label="Banner preview (728×200)" />
                 )}
-                <div className="flex gap-3">
-                  {uploading && <p className="text-xs text-blue-600">Uploading…</p>}
-                  <button type="button" onClick={() => imgRef.current?.click()} className="text-xs text-blue-600 hover:underline">Change image</button>
-                  <button type="button" onClick={() => { setImageUrl(''); setImagePreview(null); setCropPosition('50% 50%'); }} className="text-xs text-red-600 hover:underline">Remove</button>
-                  <button type="button" onClick={() => setCropPosition('50% 50%')} className="text-xs text-gray-500 hover:underline">Reset position</button>
-                </div>
-              </div>
-            ) : (
-              <div onClick={() => imgRef.current?.click()} className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') imgRef.current?.click(); }}>
-                <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" /></svg>
-                <span className="text-xs text-gray-500">Upload ad image</span>
+                <button type="button" onClick={() => setCropPosition('50% 50%')} className="text-xs text-gray-500 hover:underline">Reset position</button>
               </div>
             )}
-            <input ref={imgRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           </div>
 
           <input value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="Link URL (optional)" className="w-full border rounded px-3 py-2 text-sm" />
 
           <div className="flex gap-2 pt-1">
-            <button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+            <button type="submit" disabled={saving || uploadingImage} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">{uploadingImage ? 'Uploading image…' : saving ? 'Saving…' : 'Save'}</button>
             <button type="button" onClick={resetForm} className="bg-gray-200 px-4 py-2 rounded text-sm">Cancel</button>
           </div>
         </form>

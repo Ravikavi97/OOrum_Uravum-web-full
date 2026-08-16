@@ -143,13 +143,13 @@ export async function getArticles(
 ): Promise<PaginatedResponse<Article>> {
   const qs = params ? toQueryString(params as Record<string, unknown>) : '';
   return fetchApi<PaginatedResponse<Article>>(`/articles${qs}`, {
-    next: { revalidate: 60, tags: ['articles'] },
+    next: { revalidate: 10, tags: ['articles'] },
   });
 }
 
 export async function getArticleBySlug(slug: string): Promise<Article> {
   return fetchApi<Article>(`/articles/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 60, tags: ['articles', `article-${slug}`] },
+    next: { revalidate: 10, tags: ['articles', `article-${slug}`] },
   });
 }
 
@@ -161,7 +161,7 @@ export async function getBreakingArticles(): Promise<PaginatedResponse<Article>>
 
 export async function getCategories(): Promise<Category[]> {
   return fetchApi<Category[]>('/categories', {
-    next: { revalidate: 300, tags: ['categories'] },
+    next: { revalidate: 30, tags: ['categories'] },
   });
 }
 
@@ -169,7 +169,7 @@ export async function getCategories(): Promise<Category[]> {
 
 export async function getTags(): Promise<Tag[]> {
   return fetchApi<Tag[]>('/tags', {
-    next: { revalidate: 300, tags: ['tags'] },
+    next: { revalidate: 30, tags: ['tags'] },
   });
 }
 
@@ -177,13 +177,13 @@ export async function getTags(): Promise<Tag[]> {
 
 export async function getAuthors(): Promise<Author[]> {
   return fetchApi<Author[]>('/authors', {
-    next: { revalidate: 300, tags: ['authors'] },
+    next: { revalidate: 30, tags: ['authors'] },
   });
 }
 
 export async function getAuthorBySlug(slug: string): Promise<Author> {
   return fetchApi<Author>(`/authors/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 300, tags: ['authors'] },
+    next: { revalidate: 30, tags: ['authors'] },
   });
 }
 
@@ -216,13 +216,13 @@ export async function getObituaries(
 ): Promise<PaginatedResponse<Obituary>> {
   const qs = params ? toQueryString(params as Record<string, unknown>) : '';
   return fetchApi<PaginatedResponse<Obituary>>(`/obituaries${qs}`, {
-    next: { revalidate: 60, tags: ['obituaries'] },
+    next: { revalidate: 10, tags: ['obituaries'] },
   });
 }
 
 export async function getSiteSettings(): Promise<Record<string, string>> {
   return fetchApi<Record<string, string>>('/settings/public', {
-    next: { revalidate: 300, tags: ['settings'] },
+    next: { revalidate: 30, tags: ['settings'] },
   });
 }
 
@@ -300,19 +300,19 @@ export interface VideoPost {
 
 export async function getVideoPosts(): Promise<VideoPost[]> {
   return fetchApi<VideoPost[]>('/videos', {
-    next: { revalidate: 60, tags: ['videos'] },
+    next: { revalidate: 10, tags: ['videos'] },
   });
 }
 
 export async function getVideoBySlug(slug: string): Promise<VideoPost> {
   return fetchApi<VideoPost>(`/videos/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 60, tags: ['videos', `video-${slug}`] },
+    next: { revalidate: 10, tags: ['videos', `video-${slug}`] },
   });
 }
 
 export async function getObituaryBySlug(slug: string): Promise<Obituary> {
   return fetchApi<Obituary>(`/obituaries/slug/${encodeURIComponent(slug)}`, {
-    next: { revalidate: 60, tags: ['obituaries', `obituary-${slug}`] },
+    next: { revalidate: 10, tags: ['obituaries', `obituary-${slug}`] },
   });
 }
 
@@ -324,7 +324,7 @@ export interface VideoCat {
 
 export async function getVideoCategories(): Promise<VideoCat[]> {
   return fetchApi<VideoCat[]>('/videos/categories', {
-    next: { revalidate: 300, tags: ['videos'] },
+    next: { revalidate: 30, tags: ['videos'] },
   });
 }
 

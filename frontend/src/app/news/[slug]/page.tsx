@@ -8,7 +8,7 @@ import CommentsSection from "@/components/article/CommentsSection";
 import { ArticleImage } from "@/components/article/ArticleCard";
 import ShareButtons from "@/components/ui/ShareButtons";
 
-export const revalidate = 60;
+export const revalidate = 10;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 

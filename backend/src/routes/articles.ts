@@ -77,21 +77,26 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const { category, tag, author, status, dateFrom, dateTo } = req.query;
 
+    // Skip cache for authenticated admin requests (ensures CMS always sees fresh data)
+    const isAdminRequest = !!req.headers.authorization;
+
     // Build cache key
     const cacheKey = buildCacheKey('articles:list', {
       page, pageSize, category, tag, author, status, dateFrom, dateTo,
     });
 
-    const cached = await getCached<{
-      data: unknown[];
-      total: number;
-      page: number;
-      pageSize: number;
-      totalPages: number;
-    }>(cacheKey);
-    if (cached) {
-      res.json(cached);
-      return;
+    if (!isAdminRequest) {
+      const cached = await getCached<{
+        data: unknown[];
+        total: number;
+        page: number;
+        pageSize: number;
+        totalPages: number;
+      }>(cacheKey);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
     }
 
     // Build where clause
@@ -166,10 +171,14 @@ router.get('/:slug', async (req: AuthenticatedRequest, res: Response) => {
     const slug = req.params.slug as string;
     const cacheKey = `articles:detail:${slug}`;
 
-    const cached = await getCached<unknown>(cacheKey);
-    if (cached) {
-      res.json(cached);
-      return;
+    const isAdminRequest = !!req.headers.authorization;
+
+    if (!isAdminRequest) {
+      const cached = await getCached<unknown>(cacheKey);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
     }
 
     const article = await prisma.article.findUnique({

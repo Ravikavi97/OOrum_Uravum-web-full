@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError } from '@/lib/api';
 import { BUILT_IN_ROLES, type CustomRole } from '@/lib/permissions';
+import { ToastContainer, useToast } from '@/components/Toast';
 
 interface CmsUser {
   id: string;
@@ -34,6 +35,7 @@ function formatDate(iso: string): string {
 export default function UsersPage() {
   const { token, hasRole } = useAuth();
   const [tab, setTab] = useState<'cms' | 'frontend'>('cms');
+  const { toasts, showToast, dismiss } = useToast();
 
   // CMS users state
   const [cmsUsers, setCmsUsers] = useState<Paginated<CmsUser> | null>(null);
@@ -108,30 +110,31 @@ export default function UsersPage() {
       if (editingId) await adminFetch(`/users/${editingId}`, { token: token!, method: 'PUT', body: JSON.stringify(body) });
       else await adminFetch('/users', { token: token!, method: 'POST', body: JSON.stringify(body) });
       resetForm(); fetchCmsUsers();
+      showToast(editingId ? 'User updated' : 'User created');
     } catch (err) { setFormError(err instanceof AdminApiError ? err.message : 'Failed'); }
     finally { setSubmitting(false); }
   };
 
   const handleCmsDelete = async (id: string) => {
     if (!confirm('Delete this CMS user?')) return;
-    try { await adminFetch(`/users/${id}`, { token: token!, method: 'DELETE' }); fetchCmsUsers(); }
+    try { await adminFetch(`/users/${id}`, { token: token!, method: 'DELETE' }); fetchCmsUsers(); showToast('User deleted'); }
     catch { setCmsError('Failed to delete'); }
   };
 
   // Frontend user actions
   const toggleFeUser = async (id: string) => {
-    try { await adminFetch(`/public-auth/admin/${id}/toggle`, { token: token!, method: 'PUT' }); fetchFeUsers(); setSelectedUser(null); }
+    try { await adminFetch(`/public-auth/admin/${id}/toggle`, { token: token!, method: 'PUT' }); fetchFeUsers(); setSelectedUser(null); showToast('User status updated'); }
     catch { /* silent */ }
   };
 
   const unlockFeUser = async (id: string) => {
-    try { await adminFetch(`/public-auth/admin/${id}/unlock`, { token: token!, method: 'PUT' }); fetchFeUsers(); setSelectedUser(null); }
+    try { await adminFetch(`/public-auth/admin/${id}/unlock`, { token: token!, method: 'PUT' }); fetchFeUsers(); setSelectedUser(null); showToast('User unlocked'); }
     catch { setFeError('Failed to unlock user'); }
   };
 
   const deleteFeUser = async (id: string) => {
     if (!confirm('Delete this frontend user? This cannot be undone.')) return;
-    try { await adminFetch(`/public-auth/admin/${id}`, { token: token!, method: 'DELETE' }); fetchFeUsers(); setSelectedUser(null); }
+    try { await adminFetch(`/public-auth/admin/${id}`, { token: token!, method: 'DELETE' }); fetchFeUsers(); setSelectedUser(null); showToast('User deleted'); }
     catch { setFeError('Failed to delete'); }
   };
 
@@ -139,6 +142,7 @@ export default function UsersPage() {
 
   return (
     <div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Users</h1>
         {tab === 'cms' && (

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getVideoPosts, getVideoCategories } from "@/services/api";
 import type { VideoPost, VideoCat } from "@/services/api";
 
-export const revalidate = 60;
+export const revalidate = 10;
 
 export const metadata: Metadata = {
   title: "வீடியோக்கள் - ஊரும் உறவும்",

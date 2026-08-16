@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, DragEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError } from '@/lib/api';
+import { ToastContainer, useToast } from '@/components/Toast';
 
 // Base URL for serving uploaded files (backend origin, not the CMS origin)
 const UPLOADS_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/api$/, '');
@@ -40,6 +41,7 @@ function formatSize(bytes: number) {
 
 export default function MediaPage() {
   const { token } = useAuth();
+  const { toasts, showToast, dismiss } = useToast();
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -133,6 +135,7 @@ export default function MediaPage() {
       });
       clearSelection();
       fetchMedia();
+      showToast('Image uploaded successfully');
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : 'Upload failed');
     } finally {
@@ -157,6 +160,7 @@ export default function MediaPage() {
       setConfirmDelete(false);
       setSelectedItem(null);
       fetchMedia();
+      showToast('Image deleted');
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : 'Failed to delete');
     } finally {
@@ -176,6 +180,7 @@ export default function MediaPage() {
 
   return (
     <div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       <h1 className="text-2xl font-bold mb-6">Media Library</h1>
 
       {/* Upload zone */}

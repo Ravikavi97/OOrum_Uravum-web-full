@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError } from '@/lib/api';
+import ImageUploadField from '@/components/ImageUploadField';
 
 const UPLOADS_BASE = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/api$/, '');
 
@@ -165,51 +166,21 @@ export default function SettingsPage() {
         {/* Logos */}
         <section className="bg-white p-5 rounded-lg shadow space-y-4">
           <h2 className="text-lg font-semibold border-b pb-2">Logos</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Header Logo */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Header Logo</label>
-              {headerLogo ? (
-                <div className="flex items-start gap-3">
-                  <div className="w-32 h-16 rounded border bg-gray-900 flex items-center justify-center overflow-hidden p-1">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={headerLogo} alt="Header logo" className="max-w-full max-h-full object-contain" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <button type="button" onClick={() => headerLogoRef.current?.click()} className="text-xs text-blue-600 hover:underline">Change</button>
-                    <button type="button" onClick={() => setHeaderLogo('')} className="text-xs text-red-600 hover:underline">Remove</button>
-                  </div>
-                </div>
-              ) : (
-                <div onClick={() => headerLogoRef.current?.click()} className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') headerLogoRef.current?.click(); }}>
-                  <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" /></svg>
-                  <span className="text-xs text-gray-500">{uploadingHeader ? 'Uploading…' : 'Upload header logo'}</span>
-                </div>
-              )}
-              <input ref={headerLogoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f, 'header'); }} />
-            </div>
-            {/* Footer Logo */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Footer Logo</label>
-              {footerLogo ? (
-                <div className="flex items-start gap-3">
-                  <div className="w-32 h-16 rounded border bg-gray-900 flex items-center justify-center overflow-hidden p-1">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={footerLogo} alt="Footer logo" className="max-w-full max-h-full object-contain" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <button type="button" onClick={() => footerLogoRef.current?.click()} className="text-xs text-blue-600 hover:underline">Change</button>
-                    <button type="button" onClick={() => setFooterLogo('')} className="text-xs text-red-600 hover:underline">Remove</button>
-                  </div>
-                </div>
-              ) : (
-                <div onClick={() => footerLogoRef.current?.click()} className="flex items-center gap-3 border-2 border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors" role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') footerLogoRef.current?.click(); }}>
-                  <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" /></svg>
-                  <span className="text-xs text-gray-500">{uploadingFooter ? 'Uploading…' : 'Upload footer logo'}</span>
-                </div>
-              )}
-              <input ref={footerLogoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f, 'footer'); }} />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <ImageUploadField
+              label="Header Logo"
+              value={headerLogo}
+              onChange={setHeaderLogo}
+              onUploadingChange={setUploadingHeader}
+              prefer="original"
+            />
+            <ImageUploadField
+              label="Footer Logo"
+              value={footerLogo}
+              onChange={setFooterLogo}
+              onUploadingChange={setUploadingFooter}
+              prefer="original"
+            />
           </div>
         </section>
 
@@ -257,8 +228,8 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <button type="submit" disabled={saving} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-          {saving ? 'Saving…' : 'Save All Settings'}
+        <button type="submit" disabled={saving || uploadingHeader || uploadingFooter} className="bg-blue-600 text-white px-8 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+          {(uploadingHeader || uploadingFooter) ? 'Uploading image…' : saving ? 'Saving…' : 'Save All Settings'}
         </button>
       </form>
     </div>

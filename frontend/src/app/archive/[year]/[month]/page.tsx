@@ -4,7 +4,7 @@ import { getArticles } from "@/services/api";
 import ArticleCard from "@/components/article/ArticleCard";
 import Pagination from "@/components/ui/Pagination";
 
-export const revalidate = 60;
+export const revalidate = 10;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const MONTHS = ["ஜனவரி","பிப்ரவரி","மார்ச்","ஏப்ரல்","மே","ஜூன்","ஜூலை","ஆகஸ்ட்","செப்டம்பர்","அக்டோபர்","நவம்பர்","டிசம்பர்"];
 

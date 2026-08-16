@@ -122,11 +122,29 @@ if ($doBackend) {
     if (Test-Path $BE_DEST) { Remove-Item $BE_DEST -Recurse -Force }
     New-Item -ItemType Directory -Path $BE_DEST | Out-Null
 
+    # Prisma schema lives at root prisma/ but postinstall expects backend/prisma/
+    # Copy it in before npm install so 'prisma generate' can find it
+    $rootPrisma    = Join-Path $ROOT "prisma"
+    $backendPrisma = Join-Path $BE_SRC "prisma"
+    if ((Test-Path $rootPrisma) -and (-not (Test-Path $backendPrisma))) {
+        Copy-Item $rootPrisma $backendPrisma -Recurse
+        Write-Ok "Copied root prisma/ into backend/prisma/ for postinstall"
+        $cleanupBackendPrisma = $true
+    } else {
+        $cleanupBackendPrisma = $false
+    }
+
     # Install dependencies
     if (-not $SkipInstall) {
         Write-Step "backend: npm install"
         Invoke-Cmd "npm install" $BE_SRC
         Write-Ok "npm install done"
+    }
+
+    # Remove the temporary prisma copy from backend/ (keep source tree clean)
+    if ($cleanupBackendPrisma -and (Test-Path $backendPrisma)) {
+        Remove-Item $backendPrisma -Recurse -Force
+        Write-Ok "Cleaned up temporary backend/prisma/"
     }
 
     # Compile TypeScript
@@ -144,7 +162,8 @@ if ($doBackend) {
         Copy-Item $pkgLock $BE_DEST
     }
 
-    # Copy prisma schema + migrations
+    # Copy prisma schema + migrations into deploy/backend/prisma/
+    # (needed on cPanel so postinstall can run prisma generate there too)
     $prismaSrc = $null
     foreach ($candidate in @(
         (Join-Path $BE_SRC "prisma"),

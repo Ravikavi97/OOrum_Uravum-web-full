@@ -107,9 +107,22 @@ export default function Footer() {
 
         <div className="mt-6 border-t border-white/10 pt-4">
           <VisitorStats />
-          <p className="mt-4 text-center text-xs text-white/40">
-            Copyright © {new Date().getFullYear()} {siteName}
-          </p>
+          <div className="mt-4 flex flex-col items-center gap-1 sm:flex-row sm:justify-between">
+            <p className="text-center text-xs text-white/40">
+              Copyright © {new Date().getFullYear()} {siteName}
+            </p>
+            <p className="text-center text-xs text-white/40">
+              Developed by{' '}
+              <a
+                href="https://casoftsolutions.cyvok.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/60 transition-colors hover:text-white underline-offset-2 hover:underline"
+              >
+                CASoftSolution
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </footer>

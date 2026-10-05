@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getObituaryBySlug, ApiRequestError } from "@/services/api";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 export const revalidate = 10;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
@@ -31,11 +32,10 @@ export default async function ObituaryPage({ params }: { params: Promise<{ slug:
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
-      <nav className="flex items-center gap-2 text-sm text-foreground/50 mb-6">
-        <Link href="/" className="hover:text-accent-red">முகப்பு</Link>
-        <span>/</span>
-        <span>இரங்கல்</span>
-      </nav>
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: 'இரங்கல்' },
+      ]} />
 
       <article className="rounded-2xl bg-card-bg shadow-sm overflow-hidden">
         <div className="w-full bg-gray-100 flex items-center justify-center overflow-hidden">
@@ -46,10 +46,10 @@ export default async function ObituaryPage({ params }: { params: Promise<{ slug:
             className="w-full h-auto object-contain"
           />
         </div>
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <h1 className="text-xl font-bold mb-2">{obit.name}</h1>
           <p className="text-xs text-foreground/40 mb-4">{new Date(obit.publishedAt).toLocaleDateString("ta-IN", { year: "numeric", month: "long", day: "numeric" })}</p>
-          <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line">{obit.content}</div>
+          <div className="text-sm leading-relaxed text-foreground/80 whitespace-pre-line break-words">{obit.content}</div>
         </div>
       </article>
     </main>

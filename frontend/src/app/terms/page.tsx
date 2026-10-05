@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 export const metadata: Metadata = {
   title: 'விதிமுறைகள் | ஊரும் உறவும்',
@@ -10,7 +11,11 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
+    <main className="max-w-3xl mx-auto px-4 py-12">
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: 'பயன்பாட்டு விதிமுறைகள்' },
+      ]} />
       <h1 className="text-3xl font-bold mb-6">பயன்பாட்டு விதிமுறைகள்</h1>
       <div className="prose prose-lg max-w-none">
         <p>
@@ -29,6 +34,6 @@ export default function TermsPage() {
           அவதூறான அல்லது தவறான கருத்துகள் அகற்றப்படும்.
         </p>
       </div>
-    </div>
+    </main>
   );
 }

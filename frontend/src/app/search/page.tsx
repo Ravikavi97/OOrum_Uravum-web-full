@@ -4,6 +4,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, Suspense } from "react";
 import type { Article, PaginatedResponse } from "@/services/api";
 import ArticleCard from "@/components/article/ArticleCard";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
@@ -74,6 +75,10 @@ function SearchContent() {
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: 'தேடல்' },
+      ]} />
       <h1 className="mb-6 text-3xl font-bold">தேடல்</h1>
 
       {/* Search form */}
@@ -83,7 +88,7 @@ function SearchContent() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="செய்திகளைத் தேடுங்கள்..."
-          className="flex-1 rounded border border-foreground/20 bg-background px-4 py-2 text-base focus:border-blue-500 focus:outline-none"
+          className="min-w-0 flex-1 rounded border border-foreground/20 bg-background px-4 py-2 text-base focus:border-blue-500 focus:outline-none"
         />
         <button
           type="submit"
@@ -104,7 +109,7 @@ function SearchContent() {
       {/* Results */}
       {!loading && results && (
         <>
-          <p className="mb-4 text-sm text-foreground/60">
+          <p className="mb-4 text-sm text-foreground/60 break-words">
             &quot;{query}&quot; — {results.total} முடிவுகள்
           </p>
 

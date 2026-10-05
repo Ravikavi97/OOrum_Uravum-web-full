@@ -34,7 +34,11 @@ export default function ArticleSlider({ articles }: { articles: Article[] }) {
   return (
     <div className="relative w-full overflow-hidden rounded-lg bg-card-bg shadow-sm">
       {/* Slide */}
-      <div className="relative aspect-[16/7] sm:aspect-[16/6] w-full">
+      {/* A 16/7 box is only ~143px tall at 360px, which is far shorter than the
+          overlay below needs — the category chip and headline were clipped off the
+          top. Use a minimum height on phones and only switch to a fixed ratio once
+          there is room for the overlay beside it. */}
+      <div className="relative aspect-auto min-h-[320px] w-full sm:aspect-[16/7] sm:min-h-0 lg:aspect-[16/6]">
         <div className="absolute inset-0">
           <ArticleImage
             featuredImage={article.featuredImage}
@@ -46,25 +50,25 @@ export default function ArticleSlider({ articles }: { articles: Article[] }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
         {/* Content overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8">
+        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-8">
           <Link
             href={`/category/${article.category.slug}`}
             className="inline-block rounded bg-accent-red px-2.5 py-1 text-xs font-bold text-white hover:bg-accent-red/90 transition-colors"
           >
             {article.category.name}
           </Link>
-          <h2 className="mt-2 text-xl sm:text-2xl md:text-3xl font-bold text-white leading-snug line-clamp-2">
+          <h2 className="mt-2 text-lg font-bold text-white leading-snug line-clamp-2 sm:text-2xl md:text-3xl">
             <Link href={`/news/${article.slug}`} className="hover:underline">
               {article.title}
             </Link>
           </h2>
           {article.excerpt && (
-            <p className="mt-2 text-sm text-white/80 line-clamp-2 max-w-2xl">{article.excerpt}</p>
+            <p className="mt-2 hidden text-sm text-white/80 line-clamp-2 max-w-2xl sm:block">{article.excerpt}</p>
           )}
           <div className="mt-3 flex items-center gap-2 text-xs text-white/60">
-            <span className="font-medium text-white/80">{article.author.name}</span>
-            <span>·</span>
-            <time dateTime={article.publishedAt ?? article.createdAt}>
+            <span className="min-w-0 truncate font-medium text-white/80">{article.author.name}</span>
+            <span className="shrink-0">·</span>
+            <time className="shrink-0" dateTime={article.publishedAt ?? article.createdAt}>
               {formatDate(article.publishedAt ?? article.createdAt)}
             </time>
           </div>

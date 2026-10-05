@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useUserAuth } from '@/contexts/UserAuthContext';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -72,7 +73,11 @@ export default function SubmitObituaryPage() {
   if (success) {
     return (
       <main className="mx-auto max-w-xl px-4 py-12 text-center">
-        <div className="bg-green-50 rounded-2xl p-8 border border-green-200">
+        <Breadcrumb items={[
+          { label: 'முகப்பு', href: '/' },
+          { label: 'இரங்கல் சமர்ப்பிக்க' },
+        ]} />
+        <div className="mt-6 bg-green-50 rounded-2xl p-8 border border-green-200">
           <div className="text-5xl mb-4">✅</div>
           <h1 className="text-xl font-bold text-green-800 mb-2">சமர்ப்பிக்கப்பட்டது!</h1>
           <p className="text-sm text-green-700 mb-4">
@@ -89,11 +94,10 @@ export default function SubmitObituaryPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-8">
-      <nav className="flex items-center gap-2 text-sm text-foreground/50 mb-6">
-        <Link href="/" className="hover:text-accent-red">முகப்பு</Link>
-        <span>/</span>
-        <span>இரங்கல் சமர்ப்பிக்க</span>
-      </nav>
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: 'இரங்கல் சமர்ப்பிக்க' },
+      ]} />
 
       <div className="bg-card-bg rounded-2xl shadow-sm p-6 sm:p-8">
         <div className="flex items-center gap-2 mb-6">

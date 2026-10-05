@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getAuthorBySlug, getArticles } from "@/services/api";
 import ArticleCard from "@/components/article/ArticleCard";
 import Pagination from "@/components/ui/Pagination";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 export const revalidate = 10;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -31,11 +32,15 @@ export default async function AuthorPage({ params, searchParams }: { params: Pro
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: author.name },
+      ]} />
       <section className="mb-8 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
         {author.profileImage && <img src={author.profileImage} alt={author.name} className="h-24 w-24 rounded-full object-cover" />}
         <div className="text-center sm:text-left">
           <h1 className="text-2xl font-bold">{author.name}</h1>
-          {author.bio && <p className="mt-2 text-foreground/60 text-sm">{author.bio}</p>}
+          {author.bio && <p className="mt-2 text-foreground/60 text-sm break-words">{author.bio}</p>}
           {social && Object.keys(social).length > 0 && (
             <div className="mt-2 flex flex-wrap justify-center gap-3 sm:justify-start">
               {Object.entries(social).map(([p, u]) => <a key={p} href={u} target="_blank" rel="noopener noreferrer" className="text-sm text-link-blue hover:underline">{p}</a>)}

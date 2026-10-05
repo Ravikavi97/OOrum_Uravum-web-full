@@ -123,6 +123,8 @@ model Category {
   name        String     @db.VarChar(255)
   slug        String     @unique @db.VarChar(255)
   description String?    @db.Text
+  iconUrl     String?    @map("icon_url") @db.VarChar(500)
+  iconKey     String?    @map("icon_key") @db.VarChar(50)
   parentId    String?    @map("parent_id") @db.VarChar(30)
   parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryHierarchy")
@@ -314,6 +316,12 @@ model Advertisement {
   cropPosition String?  @map("crop_position") @db.VarChar(50) // e.g. "50% 30%" for object-position
   active       Boolean  @default(true)
   order        Int      @default(0)
+  // Card presentation
+  variant      String   @default("default") @db.VarChar(50) // default, event, book
+  badge        String?  @db.VarChar(50) // pill label, e.g. "UPCOMING EVENT"
+  metaText     String?  @map("meta_text") @db.VarChar(255) // muted text beside the badge
+  icon         String?  @db.VarChar(50) // icon key used when there is no image
+  linkLabel    String?  @map("link_label") @db.VarChar(100) // CTA text, e.g. "Register & Sponsor"
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

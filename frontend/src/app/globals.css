@@ -1,94 +1,117 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* ── Theme tokens ──────────────────────────────────────────────────────────── */
 :root {
-  --background: #f5f5f5;
-  --foreground: #171717;
-  --primary-dark: #1a1a2e;
-  --accent-red: #e94560;
-  --link-blue: #0066cc;
+  --background: #f4f4f4;
+  --foreground: #1a1a1a;
+  --primary-dark: #0d1b0f;        /* very dark green-black for header/footer  */
+  --accent-red: #259306;          /* site accent = green (from live themeColors) */
+  --link-blue: #1a6e2e;
   --card-bg: #ffffff;
+  --nav-bg: #1c3d1f;              /* nav bar background */
+  --section-border: #259306;      /* section heading underline */
+  --muted: #6b7280;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background:   var(--background);
+  --color-foreground:   var(--foreground);
   --color-primary-dark: var(--primary-dark);
-  --color-accent-red: var(--accent-red);
-  --color-link-blue: var(--link-blue);
-  --color-card-bg: var(--card-bg);
-  --font-sans: var(--font-noto-sans-tamil), var(--font-mukta-malar), "Noto Sans Tamil", "Mukta Malar", sans-serif;
+  --color-accent-red:   var(--accent-red);
+  --color-link-blue:    var(--link-blue);
+  --color-card-bg:      var(--card-bg);
+  --color-nav-bg:       var(--nav-bg);
+  --font-sans: var(--font-noto-sans-tamil), var(--font-mukta-malar),
+               "Noto Sans Tamil", "Mukta Malar", sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
+/* ── Featured hub card background (site green palette) ─────────────────────── */
+.bg-hub-gradient {
+  background-image: radial-gradient(ellipse at center, var(--nav-bg) 0%, var(--primary-dark) 100%);
 }
 
-/* Breaking news ticker animation */
+/* ── Base ──────────────────────────────────────────────────────────────────
+   These resets MUST live inside `@layer base`. Tailwind v4 declares
+   `@layer theme, base, components, utilities;`, and unlayered CSS outranks
+   every layered rule in the cascade. An unlayered `img { … }` therefore beats
+   `h-*` / `w-*` / `max-w-*` utilities on all images in the app: the header and
+   footer logos ignored their sizing classes and expanded to their full natural
+   width, pushing the sticky header from ~130px to 372px. Keep base resets in
+   this layer so `utilities` — declared after it — keeps the final word. ────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    /* Long URLs, emails and unbroken Tamil compounds must never widen the page.
+       Without this a single unbroken token inside prose (or author-supplied HTML)
+       forces the whole document to scroll sideways on a phone. */
+    overflow-wrap: break-word;
+  }
+
+  a { transition: color 0.15s ease; }
+
+  /* height:auto alongside max-width keeps the intrinsic ratio when an image is
+     scaled down, instead of distorting it to whatever height was set. Utilities
+     such as `h-9` or `max-w-[120px]` still override both, because `utilities` is
+     declared after `base`. */
+  img { display: block; max-width: 100%; height: auto; }
+}
+
+/* ── Ticker ────────────────────────────────────────────────────────────────── */
 @keyframes ticker-scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
-
 .animate-ticker {
-  animation: ticker-scroll 30s linear infinite;
+  animation: ticker-scroll 45s linear infinite;
+}
+.animate-ticker:hover { animation-play-state: paused; }
+
+/* ── Slideshow progress bar ────────────────────────────────────────────────── */
+@keyframes progress-bar-fill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+.animate-progress-bar {
+  animation: progress-bar-fill linear forwards;
 }
 
-.animate-ticker:hover {
-  animation-play-state: paused;
-}
-
-/* Card hover effect */
-.card-hover {
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.card-hover:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-/* Dropdown animation */
+/* ── Dropdown menu ─────────────────────────────────────────────────────────── */
 @keyframes dropdown-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+.animate-dropdown { animation: dropdown-in 0.18s ease-out; }
 
-.animate-dropdown {
-  animation: dropdown-in 0.15s ease-out;
+/* ── Fade-in-up ────────────────────────────────────────────────────────────── */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+.animate-fade-in-up { animation: fade-in-up 0.35s ease-out forwards; }
 
-/* Skeleton loading animation */
-@keyframes skeleton-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.animate-skeleton {
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
-  background-size: 200% 100%;
-  animation: skeleton-pulse 1.5s ease-in-out infinite, skeleton-shimmer 2s linear infinite;
-}
-
+/* ── Skeleton shimmer ──────────────────────────────────────────────────────── */
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
+  0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
-
-/* Smooth link transitions */
-a {
-  transition: color 0.15s ease;
+.animate-skeleton {
+  background: linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 50%,#e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s linear infinite;
 }
+
+/* ── Responsive typography scale ──────────────────────────────────────────── */
+.headline-xl  { font-size: clamp(1.1rem, 2.5vw, 1.6rem); font-weight: 800; line-height: 1.25; }
+.headline-lg  { font-size: clamp(0.95rem, 2vw, 1.15rem); font-weight: 700; line-height: 1.3; }
+.headline-md  { font-size: 0.875rem; font-weight: 700; line-height: 1.35; }
+.headline-sm  { font-size: 0.78rem;  font-weight: 600; line-height: 1.4; }
+.meta-text    { font-size: 0.68rem; color: var(--muted); }

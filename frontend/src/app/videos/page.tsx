@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getVideoPosts, getVideoCategories } from "@/services/api";
 import type { VideoPost, VideoCat } from "@/services/api";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 export const revalidate = 10;
 
@@ -88,6 +89,18 @@ export default async function VideosPage({ searchParams }: { searchParams: Promi
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <Breadcrumb items={
+        activeCat
+          ? [
+              { label: 'முகப்பு', href: '/' },
+              { label: 'வீடியோக்கள்', href: '/videos' },
+              { label: activeCat.name },
+            ]
+          : [
+              { label: 'முகப்பு', href: '/' },
+              { label: 'வீடியோக்கள்' },
+            ]
+      } />
       {/* Header */}
       <div className="flex items-center gap-2 mb-2">
         <span className="w-1 h-6 bg-accent-red rounded-full" />

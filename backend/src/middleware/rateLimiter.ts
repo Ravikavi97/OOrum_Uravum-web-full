@@ -23,7 +23,7 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const authReq = req as AuthenticatedRequest;
-    return authReq.user?.userId ?? req.ip ?? 'unknown';
+    return authReq.user?.userId ?? 'unknown';
   },
   handler: rateLimitHandler,
 });
@@ -35,7 +35,7 @@ export const uploadRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const authReq = req as AuthenticatedRequest;
-    return authReq.user?.userId ?? req.ip ?? 'unknown';
+    return authReq.user?.userId ?? 'unknown';
   },
   handler: (_req: Request, res: Response) => {
     res.status(429).json({

@@ -64,6 +64,8 @@ const spec = {
           name: { type: 'string' },
           slug: { type: 'string' },
           description: { type: 'string', nullable: true },
+          iconUrl: { type: 'string', nullable: true, description: 'Uploaded icon path, e.g. /uploads/icons/<uuid>.png' },
+          iconKey: { type: 'string', nullable: true, description: 'Built-in icon key — see GET /categories/meta/icons' },
           parentId: { type: 'string', nullable: true },
           children: { type: 'array', items: { $ref: '#/components/schemas/Category' } },
         },
@@ -232,10 +234,19 @@ const spec = {
     // ── Categories ──
     '/categories': {
       get: { tags: ['Categories'], summary: 'List categories with children', responses: { '200': { description: 'Categories array', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Category' } } } } } } },
-      post: { tags: ['Categories'], summary: 'Create category', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, description: { type: 'string' }, parentId: { type: 'string' } } } } } }, responses: { '201': { description: 'Created' } } },
+      post: { tags: ['Categories'], summary: 'Create category', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, description: { type: 'string' }, parentId: { type: 'string' }, iconUrl: { type: 'string', nullable: true }, iconKey: { type: 'string', nullable: true } } } } } }, responses: { '201': { description: 'Created' } } },
+    },
+    '/categories/with-latest': {
+      get: { tags: ['Categories'], summary: 'Categories with their latest published article', parameters: [{ name: 'rootOnly', in: 'query', required: false, schema: { type: 'boolean', default: true }, description: 'Set false to include child categories' }], responses: { '200': { description: 'Array of categories, each with an `article` object or null' } } },
+    },
+    '/categories/meta/icons': {
+      get: { tags: ['Categories'], summary: 'Built-in category icon keys', responses: { '200': { description: 'Object with an `icons` array of allowed iconKey values' } } },
+    },
+    '/categories/icon': {
+      post: { tags: ['Categories'], summary: 'Upload a category icon', security: [{ BearerAuth: [] }], description: 'Accepts PNG, JPG, WebP or SVG up to 512KB. SVG is sanitized and rasterized to PNG before storage.', requestBody: { content: { 'multipart/form-data': { schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary' } } } } } }, responses: { '201': { description: 'Stored icon', content: { 'application/json': { schema: { type: 'object', properties: { url: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' } } } } } }, '400': { description: 'INVALID_ICON' } } },
     },
     '/categories/{id}': {
-      put: { tags: ['Categories'], summary: 'Update category', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, parentId: { type: 'string' } } } } } }, responses: { '200': { description: 'Updated' } } },
+      put: { tags: ['Categories'], summary: 'Update category', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, parentId: { type: 'string' }, iconUrl: { type: 'string', nullable: true }, iconKey: { type: 'string', nullable: true } } } } } }, responses: { '200': { description: 'Updated' } } },
       delete: { tags: ['Categories'], summary: 'Delete category (Admin)', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Deleted' } } },
     },
     // ── Tags ──
@@ -298,8 +309,8 @@ const spec = {
     },
     // ── Advertisements ──
     '/ads': {
-      get: { tags: ['Advertisements'], summary: 'List ads (public: active only)', responses: { '200': { description: 'Ads array', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Advertisement' } } } } } } },
-      post: { tags: ['Advertisements'], summary: 'Create ad (Admin)', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['title'], properties: { title: { type: 'string' }, description: { type: 'string' }, imageUrl: { type: 'string' }, linkUrl: { type: 'string' }, position: { type: 'string', enum: ['sidebar', 'banner'] }, active: { type: 'boolean' } } } } } }, responses: { '201': { description: 'Created' } } },
+      get: { tags: ['Advertisements'], summary: 'List ads (public: active only)', parameters: [{ name: 'position', in: 'query', required: false, schema: { type: 'string', enum: ['sidebar', 'banner', 'header'] } }], responses: { '200': { description: 'Ads array', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Advertisement' } } } } } } },
+      post: { tags: ['Advertisements'], summary: 'Create ad (Admin)', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['title'], properties: { title: { type: 'string' }, description: { type: 'string' }, imageUrl: { type: 'string' }, linkUrl: { type: 'string' }, position: { type: 'string', enum: ['sidebar', 'banner', 'header'] }, variant: { type: 'string', enum: ['default', 'event', 'book'] }, badge: { type: 'string' }, metaText: { type: 'string' }, icon: { type: 'string', enum: ['calendar', 'book', 'ticket', 'megaphone', 'gift', 'users', 'heart', 'sparkles', 'star', 'globe'] }, linkLabel: { type: 'string' }, active: { type: 'boolean' } } } } } }, responses: { '201': { description: 'Created' } } },
     },
     '/ads/{id}': {
       put: { tags: ['Advertisements'], summary: 'Update ad (Admin)', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Updated' } } },

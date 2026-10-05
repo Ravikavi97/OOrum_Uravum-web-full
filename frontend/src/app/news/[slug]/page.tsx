@@ -7,6 +7,7 @@ import JsonLd from "@/components/seo/JsonLd";
 import CommentsSection from "@/components/article/CommentsSection";
 import { ArticleImage } from "@/components/article/ArticleCard";
 import ShareButtons from "@/components/ui/ShareButtons";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 export const revalidate = 10;
 
@@ -79,6 +80,11 @@ export default async function ArticleDetailPage({
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
       <JsonLd article={article} siteUrl={SITE_URL} />
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: article.category.name, href: `/category/${article.category.slug}` },
+        { label: article.title },
+      ]} />
       {/* Category */}
       <Link
         href={`/category/${article.category.slug}`}
@@ -88,7 +94,7 @@ export default async function ArticleDetailPage({
       </Link>
 
       {/* Title */}
-      <h1 className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">
+      <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl lg:text-4xl">
         {article.title}
       </h1>
 
@@ -130,9 +136,11 @@ export default async function ArticleDetailPage({
         />
       </div>
 
-      {/* Article body */}
+      {/* Article body — base size on phones: prose-lg (18px) leaves only ~28
+          characters per line in a 328px column, which is unreadable. break-words
+          guards author-supplied HTML containing long URLs or unbroken strings. */}
       <div
-        className="prose prose-lg mt-8 max-w-none"
+        className="prose prose-base mt-8 max-w-none break-words sm:prose-lg"
         dangerouslySetInnerHTML={{ __html: article.content }}
       />
 

@@ -50,7 +50,7 @@ export default function AdBanner() {
 
       {selectedAd && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedAd(null)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] max-h-[90dvh] overscroll-contain overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="font-bold text-lg">{selectedAd.title}</h2>
               <button onClick={() => setSelectedAd(null)} className="text-gray-400 hover:text-gray-600 text-xl" aria-label="Close">✕</button>

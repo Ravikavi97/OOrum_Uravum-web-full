@@ -13,9 +13,9 @@ function TickerSkeleton() {
     <div className="bg-accent-red/80">
       <div className="mx-auto flex max-w-7xl items-center px-4 py-2">
         <Skeleton className="h-6 w-20 rounded bg-white/20" />
-        <div className="flex-1 ml-3 flex gap-8">
+        <div className="flex-1 ml-3 flex gap-8 overflow-hidden">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-4 w-40 bg-white/20" />
+            <Skeleton key={i} className="h-4 w-24 shrink-0 bg-white/20 sm:w-40" />
           ))}
         </div>
       </div>
@@ -47,7 +47,7 @@ function HeroSkeleton() {
       {/* Info row */}
       <div>
         <Skeleton className="h-5 w-40 mb-3" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="rounded-lg overflow-hidden">
               <Skeleton className="aspect-[16/10] w-full" />

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getVideoBySlug, getVideoPosts, ApiRequestError } from "@/services/api";
 import type { VideoPost } from "@/services/api";
 import ShareButtons from "@/components/ui/ShareButtons";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 export const revalidate = 10;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -101,17 +102,20 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ sl
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <nav className="flex items-center gap-2 text-sm text-foreground/50 mb-4">
-        <Link href="/" className="hover:text-accent-red">முகப்பு</Link>
-        <span>/</span>
-        <Link href="/videos" className="hover:text-accent-red">வீடியோக்கள்</Link>
-        {video.category && (
-          <>
-            <span>/</span>
-            <Link href={`/videos?category=${video.category.slug}`} className="hover:text-accent-red">{video.category.name}</Link>
-          </>
-        )}
-      </nav>
+      <Breadcrumb items={
+        video.category
+          ? [
+              { label: 'முகப்பு', href: '/' },
+              { label: 'வீடியோக்கள்', href: '/videos' },
+              { label: video.category.name, href: `/videos?category=${video.category.slug}` },
+              { label: video.title },
+            ]
+          : [
+              { label: 'முகப்பு', href: '/' },
+              { label: 'வீடியோக்கள்', href: '/videos' },
+              { label: video.title },
+            ]
+      } />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
@@ -144,18 +148,9 @@ export default async function VideoDetailPage({ params }: { params: Promise<{ sl
 
             {video.description && (
               <div className="mt-4 p-4 bg-card-bg rounded-xl border border-gray-100">
-                <p className="text-sm text-foreground/70 leading-relaxed whitespace-pre-line">{video.description}</p>
+                <p className="text-sm text-foreground/70 leading-relaxed whitespace-pre-line break-words">{video.description}</p>
               </div>
             )}
-
-            {/* Share buttons */}
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <ShareButtons
-                url={`${SITE_URL}/videos/${video.slug}`}
-                title={video.title}
-                description={video.description || undefined}
-              />
-            </div>
 
             {/* Share buttons */}
             <div className="mt-6 pt-4 border-t border-gray-200">

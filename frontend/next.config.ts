@@ -37,7 +37,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/favicon.ico',
+        // `/favicon.ico` is the convention-emitted tab icon and `/logo.png` is the
+        // bundled fallback wordmark. Both are content-stable, so they may be held
+        // for a day; the app-route icons (`/icon.svg`, `/apple-icon.png`) are
+        // content-hashed by Next.js and are already immutable.
+        source: '/:file(favicon.ico|logo.png)',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=86400' },
         ],

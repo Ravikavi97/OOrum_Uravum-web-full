@@ -1,5 +1,6 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
 import {
@@ -11,24 +12,46 @@ import {
 } from '../lib/cache';
 import { generateUniqueSlug } from '../lib/slug';
 import { revalidateFrontend } from '../lib/revalidate';
+import { CATEGORY_ICON_KEYS, isCategoryIconKey } from '../lib/categoryIcons';
+import { storeCategoryIcon, isValidIconUrl } from '../lib/categoryIconUpload';
 
 const router = Router();
 
-// ─── Zod Schemas ─────────────────────────────────────────────────────────────
+const UPLOAD_PATH = process.env.MEDIA_UPLOAD_PATH || './uploads';
+
+const iconUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 512 * 1024, files: 1 },
+});
+
+// ─── Zod Schemas ──────────────────────────────────────────────────────────────
+
+const iconUrlSchema = z
+  .string()
+  .max(500)
+  .refine(isValidIconUrl, { message: 'Icon URL must be an uploaded icon or an http(s) URL' });
+
+const iconKeySchema = z
+  .string()
+  .refine(isCategoryIconKey, { message: 'Unknown icon key' });
 
 const createCategorySchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
   parentId: z.string().optional(),
+  iconUrl: iconUrlSchema.optional().nullable(),
+  iconKey: iconKeySchema.optional().nullable(),
 });
 
 const updateCategorySchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
   description: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
+  iconUrl: iconUrlSchema.optional().nullable(),
+  iconKey: iconKeySchema.optional().nullable(),
 });
 
-// ─── GET / — List all categories with hierarchy ──────────────────────────────
+// ─── GET / — List all categories with hierarchy ───────────────────────────────
 
 router.get('/', async (_req: AuthenticatedRequest, res: Response) => {
   try {
@@ -42,7 +65,7 @@ router.get('/', async (_req: AuthenticatedRequest, res: Response) => {
 
     const categories = await prisma.category.findMany({
       include: {
-        children: { select: { id: true, name: true, slug: true, description: true, parentId: true } },
+        children: { select: { id: true, name: true, slug: true, description: true, parentId: true, iconUrl: true, iconKey: true } },
         parent: { select: { id: true, name: true, slug: true } },
         _count: { select: { articles: true } },
       },
@@ -62,7 +85,111 @@ router.get('/', async (_req: AuthenticatedRequest, res: Response) => {
 });
 
 
-// ─── POST / — Create category (Editor+ role) ────────────────────────────────
+// ─── GET /with-latest — Categories with their latest published article ────────
+
+router.get('/with-latest', async (req: Request, res: Response) => {
+  try {
+    const rootOnly = req.query.rootOnly !== 'false';
+    const cacheKey = `categories:with-latest:${rootOnly ? 'root' : 'all'}`;
+
+    const cached = await getCached<unknown>(cacheKey);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
+    const categories = await prisma.category.findMany({
+      where: rootOnly ? { parentId: null } : undefined,
+      select: { id: true, name: true, slug: true, description: true, iconUrl: true, iconKey: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const withLatest = await Promise.all(
+      categories.map(async (cat) => {
+        const article = await prisma.article.findFirst({
+          where: { categoryId: cat.id, status: 'PUBLISHED' },
+          orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            excerpt: true,
+            featuredImage: true,
+            publishedAt: true,
+          },
+        });
+        return { ...cat, article };
+      }),
+    );
+
+    await setCached(cacheKey, withLatest, CATEGORY_TTL);
+    await addTagsToKey(cacheKey, ['categories', 'articles']);
+
+    res.json(withLatest);
+  } catch (err) {
+    console.error('[categories] GET /with-latest error:', err);
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch categories with latest article' },
+    });
+  }
+});
+
+
+// ─── GET /meta/icons — Built-in icon keys for the dashboard picker ────────────
+
+router.get('/meta/icons', (_req: Request, res: Response) => {
+  res.json({ icons: CATEGORY_ICON_KEYS });
+});
+
+// ─── POST /icon — Upload a category icon (Editor+ role) ───────────────────────
+//
+// Returns { url, width, height }. The stored file is always a sanitized,
+// rasterized PNG — see lib/categoryIconUpload.ts.
+
+router.post(
+  '/icon',
+  requireAuth,
+  requireRole('ADMIN', 'EDITOR'),
+  (req: AuthenticatedRequest, res: Response, next) => {
+    iconUpload.single('file')(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          res.status(400).json({
+            error: { code: 'FILE_TOO_LARGE', message: 'Icon must be smaller than 512KB' },
+          });
+          return;
+        }
+        res.status(400).json({
+          error: { code: 'UPLOAD_ERROR', message: err.message },
+        });
+        return;
+      }
+      next();
+    });
+  },
+  async (_req: AuthenticatedRequest, res: Response) => {
+    try {
+      if (!_req.file) {
+        res.status(400).json({
+          error: { code: 'NO_FILE', message: 'No file provided' },
+        });
+        return;
+      }
+
+      const stored = await storeCategoryIcon(_req.file.buffer, UPLOAD_PATH);
+      res.status(201).json(stored);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to process icon';
+      console.error('[categories] POST /icon error:', err);
+      res.status(400).json({
+        error: { code: 'INVALID_ICON', message },
+      });
+    }
+  },
+);
+
+
+// ─── POST / — Create category (Editor+ role) ──────────────────────────────────
 
 router.post(
   '/',
@@ -82,7 +209,7 @@ router.post(
     }
 
     try {
-      const { name, description, parentId } = parsed.data;
+      const { name, description, parentId, iconUrl, iconKey } = parsed.data;
 
       // Verify parent exists if provided
       if (parentId) {
@@ -103,9 +230,11 @@ router.post(
           slug,
           description: description ?? null,
           parentId: parentId ?? null,
+          iconUrl: iconUrl ?? null,
+          iconKey: iconKey ?? null,
         },
         include: {
-          children: { select: { id: true, name: true, slug: true, description: true, parentId: true } },
+          children: { select: { id: true, name: true, slug: true, description: true, parentId: true, iconUrl: true, iconKey: true } },
           parent: { select: { id: true, name: true, slug: true } },
           _count: { select: { articles: true } },
         },
@@ -125,7 +254,7 @@ router.post(
   },
 );
 
-// ─── PUT /:id — Update category (Editor+ role) ──────────────────────────────
+// ─── PUT /:id — Update category (Editor+ role) ────────────────────────────────
 
 router.put(
   '/:id',
@@ -155,7 +284,7 @@ router.put(
         return;
       }
 
-      const { name, description, parentId } = parsed.data;
+      const { name, description, parentId, iconUrl, iconKey } = parsed.data;
 
       // Verify parent exists if changing
       if (parentId !== undefined && parentId !== null) {
@@ -189,9 +318,11 @@ router.put(
           ...(newSlug && { slug: newSlug }),
           ...(description !== undefined && { description }),
           ...(parentId !== undefined && { parentId }),
+          ...(iconUrl !== undefined && { iconUrl }),
+          ...(iconKey !== undefined && { iconKey }),
         },
         include: {
-          children: { select: { id: true, name: true, slug: true, description: true, parentId: true } },
+          children: { select: { id: true, name: true, slug: true, description: true, parentId: true, iconUrl: true, iconKey: true } },
           parent: { select: { id: true, name: true, slug: true } },
           _count: { select: { articles: true } },
         },
@@ -211,7 +342,7 @@ router.put(
   },
 );
 
-// ─── DELETE /:id — Delete category (Admin only) ─────────────────────────────
+// ─── DELETE /:id — Delete category (Admin only) ───────────────────────────────
 // Rejects deletion if articles are associated (Restrict on delete per Req 15.5)
 
 router.delete(

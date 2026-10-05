@@ -24,6 +24,7 @@ import frontendAuthRouter from './routes/frontendAuth';
 import notificationsRouter from './routes/notifications';
 import dashboardRouter from './routes/dashboard';
 import { publicRateLimiter } from './middleware/rateLimiter';
+import { decodeWafPayload } from './middleware/decodeWafPayload';
 import { setupSwagger } from './swagger';
 
 dotenv.config();
@@ -58,6 +59,10 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// The publisher dashboard base64-wraps HTML fields to get past the WAF; unwrap
+// them here so HTML is stored as real markup instead of a base64 string.
+app.use(decodeWafPayload);
 
 // Rate limiting — public limiter on all /api/* routes
 app.use('/api', publicRateLimiter);

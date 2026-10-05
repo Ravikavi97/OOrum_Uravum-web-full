@@ -28,6 +28,8 @@ export interface Category {
   name: string;
   slug: string;
   description?: string | null;
+  iconUrl?: string | null;
+  iconKey?: string | null;
   parentId?: string | null;
   children?: Category[];
 }
@@ -161,7 +163,34 @@ export async function getBreakingArticles(): Promise<PaginatedResponse<Article>>
 
 export async function getCategories(): Promise<Category[]> {
   return fetchApi<Category[]>('/categories', {
-    next: { revalidate: 30, tags: ['categories'] },
+    next: { revalidate: 600, tags: ['categories'] },
+  });
+}
+
+export interface CategoryLatestArticle {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  featuredImage: string | null;
+  publishedAt: string;
+}
+
+export interface CategoryWithLatest {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  iconUrl?: string | null;
+  iconKey?: string | null;
+  article: CategoryLatestArticle | null;
+}
+
+/** Categories paired with their latest published article — powers the category card row. */
+export async function getCategoriesWithLatest(rootOnly = true): Promise<CategoryWithLatest[]> {
+  const qs = toQueryString({ rootOnly: rootOnly ? undefined : 'false' });
+  return fetchApi<CategoryWithLatest[]>(`/categories/with-latest${qs}`, {
+    next: { revalidate: 600, tags: ['categories', 'articles'] },
   });
 }
 
@@ -220,11 +249,66 @@ export async function getObituaries(
   });
 }
 
-export async function getSiteSettings(): Promise<Record<string, string>> {
-  return fetchApi<Record<string, string>>('/settings/public', {
+export interface SiteSettings {
+  siteTitle?: string;
+  siteDescription?: string;
+  siteTagline?: string;
+  socialLinks?: string;
+  homeLayout?: string;
+  heroConfig?: string;
+  headerLogo?: string;
+  footerLogo?: string;
+  themeColors?: string;
+  videoHeroConfig?: string;
+  [key: string]: string | undefined;
+}
+
+export async function getSiteSettings(): Promise<SiteSettings> {
+  return fetchApi<SiteSettings>('/settings/public', {
     next: { revalidate: 30, tags: ['settings'] },
   });
 }
+
+/**
+ * Public origin of the backend, used to build `<img src>` values.
+ *
+ * Only `NEXT_PUBLIC_API_URL` is considered, never `INTERNAL_API_URL`: an
+ * `<img src>` is emitted into SSR HTML and shipped to the browser, so a Docker
+ * internal hostname such as `http://backend:4000` would be embedded verbatim and
+ * the browser could not resolve it.
+ */
+const PUBLIC_ORIGIN = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api')
+  .replace(/\/api\/?$/, '');
+
+/**
+ * Turns a stored logo path into a URL the browser can actually load.
+ *
+ * The publisher dashboard writes an absolute URL, but a row that was seeded or
+ * edited by hand holds the backend's own relative form (`/uploads/original/…`).
+ * The backend serves `/uploads` from its root, outside the `/api` prefix every
+ * API URL carries, so a relative value must be resolved against the backend
+ * origin — otherwise the browser requests it from this app's origin, gets a 404,
+ * and the header/footer shows a broken image with no recovery.
+ *
+ * Returns `null` for anything unrenderable so callers fall back to the bundled
+ * wordmark instead of emitting an `<img>` with a broken `src`.
+ */
+export function resolveAssetUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const value = path.trim();
+  if (!value) return null;
+  // Absolute URLs were validated by the API; pass them through as-is.
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith('/uploads/')) return `${PUBLIC_ORIGIN}${value}`;
+  // Same-origin static asset (for example the bundled `/logo.png`).
+  // `//host/...` is rejected: it is protocol-relative, so it would silently
+  // resolve to a third-party origin rather than this app.
+  if (value.startsWith('/') && !value.startsWith('//')) return value;
+  return null;
+}
+
+/** Bundled wordmark, used whenever the site has no usable logo configured. */
+export const DEFAULT_LOGO_SRC = '/logo.png';
 
 export interface HomeLayoutSection {
   id: string;
@@ -274,9 +358,18 @@ export async function getThemeColors(): Promise<ThemeColors | null> {
   try { return JSON.parse(settings.themeColors); } catch { return null; }
 }
 
-export async function getLogos(): Promise<{ headerLogo: string; footerLogo: string }> {
-  const settings = await getSiteSettings();
-  return { headerLogo: settings.headerLogo || '', footerLogo: settings.footerLogo || '' };
+/**
+ * Resolved logo URL for the header or footer, falling back to the bundled
+ * wordmark when the setting is empty, unreachable or not a renderable URL.
+ */
+export async function getLogo(kind: 'header' | 'footer'): Promise<string> {
+  try {
+    const settings = await getSiteSettings();
+    const stored = kind === 'header' ? settings.headerLogo : settings.footerLogo;
+    return resolveAssetUrl(stored) ?? DEFAULT_LOGO_SRC;
+  } catch {
+    return DEFAULT_LOGO_SRC;
+  }
 }
 
 // ─── Video endpoints ─────────────────────────────────────────────────────────
@@ -313,6 +406,34 @@ export async function getVideoBySlug(slug: string): Promise<VideoPost> {
 export async function getObituaryBySlug(slug: string): Promise<Obituary> {
   return fetchApi<Obituary>(`/obituaries/slug/${encodeURIComponent(slug)}`, {
     next: { revalidate: 10, tags: ['obituaries', `obituary-${slug}`] },
+  });
+}
+
+// ─── Advertisement endpoints ─────────────────────────────────────────────────
+
+export interface Advertisement {
+  id: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  position: string;
+  cropPosition: string | null;
+  active: boolean;
+  order: number;
+  variant: string;
+  badge: string | null;
+  metaText: string | null;
+  icon: string | null;
+  linkLabel: string | null;
+}
+
+export async function getAdvertisements(
+  position?: 'sidebar' | 'banner' | 'header',
+): Promise<Advertisement[]> {
+  const qs = position ? toQueryString({ position }) : '';
+  return fetchApi<Advertisement[]>(`/ads${qs}`, {
+    next: { revalidate: 60, tags: ['ads'] },
   });
 }
 

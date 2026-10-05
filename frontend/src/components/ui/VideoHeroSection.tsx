@@ -112,7 +112,11 @@ function VideoSlideshow({ videos }: { videos: VideoPost[] }) {
 
 function VideoCard({ video }: { video: VideoPost }) {
   return (
-    <div className="flex-1 relative overflow-hidden rounded-lg bg-gray-900 min-h-[140px] sm:min-h-0">
+    // Every in-flow child is absolutely positioned, so `min-height: auto` resolves to
+    // 0 and the card would be invisible below `lg`, where the grid is still a single
+    // column. Only drop the min-height at `lg`, where the side columns are actually
+    // beside the hero and get their height from it.
+    <div className="flex-1 relative overflow-hidden rounded-lg bg-gray-900 min-h-[140px] lg:min-h-0">
       <TrailerEmbed video={video} className="absolute inset-0" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
       <div className="absolute bottom-0 left-0 right-0 p-2.5 pointer-events-none">
@@ -134,7 +138,7 @@ function VideoCard({ video }: { video: VideoPost }) {
 function VideoInfoRow({ videos }: { videos: VideoPost[] }) {
   if (!videos.length) return null;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
       {videos.slice(0, 4).map((v) => (
         <div key={v.id} className="overflow-hidden rounded-lg bg-gray-900">
           <div className="relative aspect-[16/10] overflow-hidden">

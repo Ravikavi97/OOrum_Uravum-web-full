@@ -110,21 +110,23 @@ export default function ArticleCard({ article, featured, compact, small }: Props
   if (featured) {
     return (
       <article className="group relative overflow-hidden rounded-2xl shadow-lg">
-        <div className="relative aspect-[16/9] w-full overflow-hidden">
+        {/* A 16/9 box is only ~184px tall at 360px, which is shorter than this
+            overlay needs, so a long headline pushed the category chip off the top. */}
+        <div className="relative aspect-[4/3] w-full overflow-hidden sm:aspect-[16/9]">
           <ArticleImage featuredImage={article.featuredImage} title={article.title} categoryName={article.category.name} className="transition-transform duration-500 group-hover:scale-105" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           {article.isBreaking && (
             <span className="absolute top-4 left-4 rounded-full bg-accent-red px-3 py-1 text-xs font-bold text-white shadow-lg animate-pulse">🔴 முக்கிய செய்தி</span>
           )}
-          <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
+          <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
             <Link href={`/category/${article.category.slug}`} className="inline-block rounded-full bg-white/20 backdrop-blur-sm px-3 py-1 text-xs font-semibold text-white border border-white/30">{article.category.name}</Link>
-            <h3 className="mt-2 text-lg sm:text-2xl font-bold text-white leading-snug line-clamp-2 drop-shadow-lg">
+            <h3 className="mt-2 text-base font-bold text-white leading-snug line-clamp-2 drop-shadow-lg sm:text-2xl">
               <Link href={`/news/${article.slug}`} className="hover:underline">{article.title}</Link>
             </h3>
             {article.excerpt && <p className="mt-1.5 text-sm text-white/70 line-clamp-2 hidden sm:block">{article.excerpt}</p>}
             <div className="mt-2 flex items-center gap-2 text-xs text-white/50">
-              <span className="font-medium text-white/70">{article.author.name}</span>
-              <span>·</span>
+              <span className="min-w-0 truncate font-medium text-white/70">{article.author.name}</span>
+              <span className="shrink-0">·</span>
               <DateLink dt={dt} />
             </div>
           </div>
@@ -150,12 +152,14 @@ export default function ArticleCard({ article, featured, compact, small }: Props
           <Link href={`/news/${article.slug}`} className="hover:text-accent-red transition-colors">{article.title}</Link>
         </h3>
         {article.excerpt && <p className="mt-1.5 text-xs text-foreground/50 line-clamp-2">{article.excerpt}</p>}
-        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-foreground/40">
-          <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500">
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2 text-[11px] text-foreground/40">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <div className="w-5 h-5 shrink-0 rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-bold text-gray-500">
               {article.author.name.charAt(0)}
             </div>
-            <span className="font-medium text-foreground/60">{article.author.name}</span>
+            {/* Tamil author names are long unbroken compounds; without truncation
+                they pushed the date out of the card and were clipped. */}
+            <span className="min-w-0 truncate font-medium text-foreground/60">{article.author.name}</span>
           </div>
           <DateLink dt={dt} />
         </div>

@@ -5,11 +5,11 @@ function Skeleton({ className = '' }: { className?: string }) {
 export default function Loading() {
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <div className="flex items-center gap-4 mb-6">
-        <Skeleton className="w-16 h-16 rounded-full" />
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-40" />
-          <Skeleton className="h-4 w-56" />
+      <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+        <Skeleton className="w-16 h-16 shrink-0 rounded-full" />
+        <div className="min-w-0 space-y-2">
+          <Skeleton className="h-7 w-40 max-w-full" />
+          <Skeleton className="h-4 w-56 max-w-full" />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

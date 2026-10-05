@@ -2,25 +2,55 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
+import { invalidateByTags } from '../lib/cache';
+import { revalidateFrontend } from '../lib/revalidate';
 
 const router = Router();
+
+const positionSchema = z.enum(['sidebar', 'banner', 'header']);
+const variantSchema = z.enum(['default', 'event', 'book']);
+
+export const AD_ICON_KEYS = [
+  'calendar', 'book', 'ticket', 'megaphone', 'gift',
+  'users', 'heart', 'sparkles', 'star', 'globe',
+] as const;
 
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   imageUrl: z.string().optional(),
   linkUrl: z.string().optional(),
-  position: z.enum(['sidebar', 'banner', 'header']).optional(),
+  position: positionSchema.optional(),
   cropPosition: z.string().optional().nullable(),
   active: z.boolean().optional(),
   order: z.number().optional(),
+  variant: variantSchema.optional(),
+  badge: z.string().max(50).optional().nullable(),
+  metaText: z.string().max(255).optional().nullable(),
+  icon: z.enum(AD_ICON_KEYS).optional().nullable(),
+  linkLabel: z.string().max(100).optional().nullable(),
 });
 
 // GET / — List ads (public: only active; admin: all)
+// Optional ?position=sidebar|banner|header filter
 router.get('/', async (req: Request, res: Response) => {
   try {
     const isAdmin = req.headers.authorization?.startsWith('Bearer ');
-    const where = isAdmin ? {} : { active: true };
+
+    let position: string | undefined;
+    if (req.query.position !== undefined) {
+      const parsed = positionSchema.safeParse(req.query.position);
+      if (!parsed.success) {
+        res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid position', details: parsed.error.flatten().fieldErrors } });
+        return;
+      }
+      position = parsed.data;
+    }
+
+    const where = {
+      ...(isAdmin ? {} : { active: true }),
+      ...(position ? { position } : {}),
+    };
     const ads = await prisma.advertisement.findMany({
       where,
       orderBy: { order: 'asc' },
@@ -30,6 +60,10 @@ router.get('/', async (req: Request, res: Response) => {
     console.error('[ads] GET / error:', err);
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to fetch ads' } });
   }
+});
+
+router.get('/meta/icons', (_req: Request, res: Response) => {
+  res.json({ icons: AD_ICON_KEYS, variants: ['default', 'event', 'book'], positions: ['sidebar', 'banner', 'header'] });
 });
 
 // GET /:id — Get single ad
@@ -52,6 +86,8 @@ router.post('/', requireAuth, requireRole('ADMIN'), async (req: AuthenticatedReq
   }
   try {
     const ad = await prisma.advertisement.create({ data: parsed.data });
+    await invalidateByTags(['ads']);
+    revalidateFrontend();
     res.status(201).json(ad);
   } catch (err) {
     console.error('[ads] POST / error:', err);
@@ -68,6 +104,8 @@ router.put('/:id', requireAuth, requireRole('ADMIN'), async (req: AuthenticatedR
   }
   try {
     const ad = await prisma.advertisement.update({ where: { id: req.params.id as string }, data: parsed.data });
+    await invalidateByTags(['ads']);
+    revalidateFrontend();
     res.json(ad);
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to update ad' } });
@@ -78,6 +116,8 @@ router.put('/:id', requireAuth, requireRole('ADMIN'), async (req: AuthenticatedR
 router.delete('/:id', requireAuth, requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     await prisma.advertisement.delete({ where: { id: req.params.id as string } });
+    await invalidateByTags(['ads']);
+    revalidateFrontend();
     res.json({ message: 'Ad deleted' });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to delete ad' } });

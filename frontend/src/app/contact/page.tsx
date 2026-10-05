@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 export const metadata: Metadata = {
   title: 'தொடர்பு கொள்ள | ஊரும் உறவும்',
@@ -10,14 +11,20 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
+    <main className="max-w-3xl mx-auto px-4 py-12">
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: 'தொடர்பு கொள்ள' },
+      ]} />
       <h1 className="text-3xl font-bold mb-6">தொடர்பு கொள்ள</h1>
       <div className="prose prose-lg max-w-none">
         <p>
           எங்களை தொடர்பு கொள்ள கீழே உள்ள தகவல்களைப் பயன்படுத்தவும்.
         </p>
         <h2 className="text-2xl font-semibold mt-8 mb-4">மின்னஞ்சல்</h2>
-        <p>contact@oorumuravum.today</p>
+        <p>
+          <a href="mailto:contact@oorumuravum.today" className="break-all">contact@oorumuravum.today</a>
+        </p>
         <h2 className="text-2xl font-semibold mt-8 mb-4">சமூக ஊடகங்கள்</h2>
         <ul>
           <li>Facebook: @oorumuravum</li>
@@ -25,6 +32,6 @@ export default function ContactPage() {
           <li>Instagram: @oorumuravum</li>
         </ul>
       </div>
-    </div>
+    </main>
   );
 }

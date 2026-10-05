@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getArticles, getTags } from "@/services/api";
 import ArticleCard from "@/components/article/ArticleCard";
 import Pagination from "@/components/ui/Pagination";
+import Breadcrumb from "@/components/ui/Breadcrumb";
 
 export const revalidate = 10;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -31,6 +32,10 @@ export default async function TagPage({ params, searchParams }: { params: Promis
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: `#${tag?.name || slug}` },
+      ]} />
       <h1 className="mb-6 text-2xl font-bold border-b-2 border-primary-dark pb-2">#{tag?.name || slug}</h1>
       {result.data.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 export const metadata: Metadata = {
   title: 'தனியுரிமைக் கொள்கை | ஊரும் உறவும்',
@@ -10,7 +11,11 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
+    <main className="max-w-3xl mx-auto px-4 py-12">
+      <Breadcrumb items={[
+        { label: 'முகப்பு', href: '/' },
+        { label: 'தனியுரிமைக் கொள்கை' },
+      ]} />
       <h1 className="text-3xl font-bold mb-6">தனியுரிமைக் கொள்கை</h1>
       <div className="prose prose-lg max-w-none">
         <p>
@@ -28,6 +33,6 @@ export default function PrivacyPage() {
           எங்கள் தளம் சிறந்த அனுபவத்தை வழங்க குக்கீகளைப் பயன்படுத்துகிறது.
         </p>
       </div>
-    </div>
+    </main>
   );
 }

@@ -122,6 +122,7 @@ model Category {
   id          String     @id @default(cuid()) @db.VarChar(30)
   name        String     @db.VarChar(255)
   slug        String     @unique @db.VarChar(255)
+  path        String?    @unique @db.VarChar(255)
   description String?    @db.Text
   iconUrl     String?    @map("icon_url") @db.VarChar(500)
   iconKey     String?    @map("icon_key") @db.VarChar(50)

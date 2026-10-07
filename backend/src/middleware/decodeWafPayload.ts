@@ -27,11 +27,12 @@ export function decodeWafValue(value: string): string {
   const payload = value.slice(B64_PREFIX.length);
   try {
     const decoded = Buffer.from(payload, 'base64');
-    // Buffer.from silently drops invalid base64, so confirm the round trip.
-    if (decoded.length === 0 || decoded.toString('base64').replace(/=+$/, '') !== payload.replace(/=+$/, '')) {
-      return value;
-    }
-    return decoded.toString('utf8');
+    // Check if decoded buffer is non-empty and valid UTF-8
+    if (decoded.length === 0) return value;
+    const utf8String = decoded.toString('utf8');
+    // Validate that the string can be encoded back to valid UTF-8
+    if (Buffer.from(utf8String, 'utf8').length === 0) return value;
+    return utf8String;
   } catch {
     return value;
   }

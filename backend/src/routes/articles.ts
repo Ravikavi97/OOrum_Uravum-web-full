@@ -110,7 +110,14 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     }
 
     if (category && typeof category === 'string') {
-      where.category = { slug: category };
+      // Support comma-separated category slugs for hierarchical navigation
+      const categorySlugs = category.split(',').map(s => s.trim()).filter(Boolean);
+      if (categorySlugs.length === 1) {
+        where.category = { slug: categorySlugs[0] };
+      } else {
+        // Filter by multiple category slugs (parent + subcategories)
+        where.category = { slug: { in: categorySlugs } };
+      }
     }
 
     if (author && typeof author === 'string') {

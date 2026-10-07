@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthenticatedRequest, verifyToken } from '../lib/auth';
 import { invalidateByTags } from '../lib/cache';
 import { revalidateFrontend } from '../lib/revalidate';
 
@@ -35,7 +35,21 @@ const createSchema = z.object({
 // Optional ?position=sidebar|banner|header filter
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const isAdmin = req.headers.authorization?.startsWith('Bearer ');
+    // Check if user is authenticated admin by attempting to verify token
+    let isAdmin = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.substring(7);
+        const decoded = verifyToken(token);
+        if (decoded && decoded.role === 'ADMIN') {
+          isAdmin = true;
+        }
+      } catch {
+        // Invalid token - treat as non-admin
+        isAdmin = false;
+      }
+    }
 
     let position: string | undefined;
     if (req.query.position !== undefined) {

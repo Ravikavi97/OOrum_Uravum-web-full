@@ -75,7 +75,7 @@ export default function SubmitObituaryPage() {
       <main className="mx-auto max-w-xl px-4 py-12 text-center">
         <Breadcrumb items={[
           { label: 'முகப்பு', href: '/' },
-          { label: 'இரங்கல் சமர்ப்பிக்க' },
+          { label: 'Submit Obituary (அஞ்சலி)' },
         ]} />
         <div className="mt-6 bg-green-50 rounded-2xl p-8 border border-green-200">
           <div className="text-5xl mb-4">✅</div>
@@ -103,7 +103,7 @@ export default function SubmitObituaryPage() {
         <div className="flex items-center gap-2 mb-6">
           <span className="w-1 h-6 bg-accent-red rounded-full" />
           <div>
-            <h1 className="text-xl font-bold">இரங்கல் / அஞ்சலி சமர்ப்பிக்க</h1>
+            <h1 className="text-xl font-bold">Submit Obituary (அஞ்சலி)</h1>
             <p className="text-xs text-foreground/50 mt-0.5">Submit an Obituary / Tribute</p>
           </div>
         </div>
@@ -162,7 +162,7 @@ export default function SubmitObituaryPage() {
 
           {/* Content */}
           <div>
-            <label className="block text-sm font-medium mb-1">இரங்கல் செய்தி *</label>
+            <label className="block text-sm font-medium mb-1">Obituary Content *</label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}

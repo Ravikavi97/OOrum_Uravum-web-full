@@ -362,7 +362,7 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
                       </div>
                       <Link href="/submit-obituary" onClick={() => setUserMenuOpen(false)}
                         className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                        இரங்கல் பதிவிடு
+                        Obituary (அஞ்சலி)
                       </Link>
                       <button onClick={() => { logout(); setUserMenuOpen(false); }}
                         className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50">
@@ -379,7 +379,7 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
                   <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
-                  இரங்கல் பதிவிடு
+                  Obituary (அஞ்சலி)
                 </Link>
                 <button onClick={() => setAuthModalOpen(true)}
                   className="hidden md:flex items-center gap-1.5 border border-white/20 text-white/80 px-3 py-2 min-h-[40px] rounded-full text-xs font-semibold hover:bg-white/10 transition-colors">
@@ -476,7 +476,7 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
             <div className="flex items-stretch shrink-0">
               <Link href="/obituary"
                 className="flex shrink-0 items-center whitespace-nowrap px-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/10 transition-colors">
-                இரங்கல்
+                Obituary (அஞ்சலி)
               </Link>
               <button
                 onClick={() => setSearchOpen(!searchOpen)}
@@ -512,7 +512,7 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
             ))}
             <Link href="/obituary" onClick={() => setMenuOpen(false)}
               className="block px-5 py-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/8 border-b border-white/8">
-              இரங்கல்
+              Obituary (அஞ்சலி)
             </Link>
           </nav>
           {/* Mobile search */}

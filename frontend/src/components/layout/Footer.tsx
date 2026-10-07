@@ -12,10 +12,10 @@ const DEFAULT_DESCRIPTION = 'தமிழ் செய்திகள் — ச
 const quickLinks = [
   { label: 'முகப்பு',          href: '/' },
   { label: 'வீடியோ',           href: '/videos' },
-  { label: 'இரங்கல்',         href: '/obituary' },
+  { label: 'Obituary (அஞ்சலி)',         href: '/obituary' },
   { label: 'எங்களைப் பற்றி',   href: '/about' },
   { label: 'தொடர்பு',          href: '/contact' },
-  { label: 'இரங்கல் சமர்ப்பிக்க', href: '/submit-obituary' },
+  { label: 'Submit Obituary (அஞ்சலி)', href: '/submit-obituary' },
   { label: 'தனியுரிமை',       href: '/privacy' },
   { label: 'விதிமுறைகள்',     href: '/terms' },
 ];

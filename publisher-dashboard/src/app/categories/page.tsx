@@ -17,6 +17,7 @@ interface Category {
   id: string;
   name: string;
   slug: string;
+  path: string | null;
   description: string | null;
   iconUrl: string | null;
   iconKey: string | null;

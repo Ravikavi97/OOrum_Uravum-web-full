@@ -28,11 +28,29 @@ export default async function CategoryPage({ params, searchParams }: { params: P
   try { categories = await getCategories(); } catch { /* empty */ }
   const category = categories.find((c) => c.slug === slug);
 
+  // Find parent category for breadcrumb
+  const parentCategory = category?.parent?.id
+    ? categories.find((c) => c.id === category.parent!.id)
+    : null;
+
+  // Find subcategories of this category
+  const subcategories = category?.children || [];
+
   // Check if this is the obituary/tribute category
   const isObituaryCategory = slug === 'thuyarpakirvoom' || category?.description?.toLowerCase().includes('obituar');
 
+  // Build category filter list: current category + all subcategories
+  const categoryFilter = [slug, ...subcategories.map((c) => c.slug)];
+
   let result;
-  try { result = await getArticles({ category: slug, page, pageSize: 9, status: "PUBLISHED" }); }
+  try {
+    result = await getArticles({
+      category: categoryFilter.join(','),
+      page,
+      pageSize: 9,
+      status: "PUBLISHED"
+    });
+  }
   catch { result = { data: [], total: 0, page: 1, pageSize: 9, totalPages: 0 }; }
 
   // Fetch standalone obituaries for the obituary category
@@ -46,20 +64,59 @@ export default async function CategoryPage({ params, searchParams }: { params: P
 
   const hasContent = result.data.length > 0 || obituaries.length > 0;
 
+  // Build breadcrumb with full hierarchy
+  const breadcrumbItems: Array<{ label: string; href?: string }> = [
+    { label: 'முகப்பு', href: '/' },
+  ];
+
+  if (parentCategory) {
+    breadcrumbItems.push({
+      label: parentCategory.name,
+      href: `/category/${parentCategory.slug}`,
+    });
+  }
+
+  breadcrumbItems.push({
+    label: category?.name || slug,
+  });
+
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      <Breadcrumb items={[
-        { label: 'முகப்பு', href: '/' },
-        { label: category?.name || slug },
-      ]} />
+      <Breadcrumb items={breadcrumbItems} />
       <h1 className="mb-6 text-2xl font-bold border-b-2 border-primary-dark pb-2">{category?.name || slug}</h1>
       {category?.description && <p className="mb-6 text-foreground/60 text-sm">{category.description}</p>}
 
-      {/* Articles in this category */}
-      {result.data.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-          {result.data.map((a) => <ArticleCard key={a.id} article={a} />)}
+      {/* Subcategories navigation */}
+      {subcategories.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4 text-foreground/80">Subcategories</h2>
+          <div className="flex flex-wrap gap-3">
+            {subcategories.map((sub) => (
+              <Link
+                key={sub.id}
+                href={`/category/${sub.slug}`}
+                className="px-4 py-2 bg-card-bg border border-gray-200 rounded-lg hover:border-accent-red hover:text-accent-red transition-colors text-sm font-medium"
+              >
+                {sub.name}
+                {sub._count?.articles !== undefined && sub._count.articles !== null && (
+                  <span className="ml-2 text-xs text-foreground/50">({sub._count.articles})</span>
+                )}
+              </Link>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Articles in this category and subcategories */}
+      {result.data.length > 0 && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+            {result.data.map((a) => <ArticleCard key={a.id} article={a} />)}
+          </div>
+          {result.totalPages > 1 && (
+            <Pagination currentPage={page} totalPages={result.totalPages} basePath={`/category/${slug}`} />
+          )}
+        </>
       )}
 
       {/* Standalone obituaries (only for obituary category) */}
@@ -89,10 +146,6 @@ export default async function CategoryPage({ params, searchParams }: { params: P
 
       {!hasContent && (
         <p className="py-12 text-center text-foreground/60">இந்த பிரிவில் செய்திகள் இல்லை</p>
-      )}
-
-      {result.totalPages > 1 && (
-        <Pagination currentPage={page} totalPages={result.totalPages} basePath={`/category/${slug}`} />
       )}
     </main>
   );

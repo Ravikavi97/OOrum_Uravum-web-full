@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import authRouter from './routes/auth';
 import articlesRouter from './routes/articles';
@@ -68,11 +69,20 @@ app.use(decodeWafPayload);
 app.use('/api', publicRateLimiter);
 
 // Serve uploaded media files — allow cross-origin access for images
-const uploadPath = process.env.MEDIA_UPLOAD_PATH || './uploads';
+const uploadPath = process.env.MEDIA_UPLOAD_PATH;
+if (!uploadPath) {
+  console.error('FATAL: MEDIA_UPLOAD_PATH environment variable is not set');
+  process.exit(1);
+}
+const resolvedUploadPath = path.resolve(uploadPath);
+// Ensure upload directory exists
+if (!fs.existsSync(resolvedUploadPath)) {
+  fs.mkdirSync(resolvedUploadPath, { recursive: true });
+}
 app.use('/uploads', (_req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
-}, express.static(path.resolve(uploadPath)));
+}, express.static(resolvedUploadPath));
 
 // Routes
 app.use('/api/auth', authRouter);

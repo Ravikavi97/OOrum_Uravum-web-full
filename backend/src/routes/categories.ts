@@ -10,14 +10,18 @@ import {
   addTagsToKey,
   CATEGORY_TTL,
 } from '../lib/cache';
-import { generateUniqueSlug } from '../lib/slug';
+import { generateUniqueSlug, isValidSlug } from '../lib/slug';
 import { revalidateFrontend } from '../lib/revalidate';
 import { CATEGORY_ICON_KEYS, isCategoryIconKey } from '../lib/categoryIcons';
 import { storeCategoryIcon, isValidIconUrl } from '../lib/categoryIconUpload';
+import { isValidPath } from '../lib/path';
 
 const router = Router();
 
-const UPLOAD_PATH = process.env.MEDIA_UPLOAD_PATH || './uploads';
+const UPLOAD_PATH = process.env.MEDIA_UPLOAD_PATH;
+if (!UPLOAD_PATH) {
+  throw new Error('MEDIA_UPLOAD_PATH environment variable is not set');
+}
 
 const iconUpload = multer({
   storage: multer.memoryStorage(),
@@ -35,20 +39,38 @@ const iconKeySchema = z
   .string()
   .refine(isCategoryIconKey, { message: 'Unknown icon key' });
 
+const slugSchema = z
+  .string()
+  .min(1, 'Slug cannot be empty')
+  .max(100, 'Slug is too long')
+  .refine(isValidSlug, { message: 'Slug must contain only lowercase letters, numbers, and hyphens' })
+  .optional();
+
+const pathSchema = z
+  .string()
+  .max(100, 'Path is too long')
+  .refine(isValidPath, { message: 'Path must start with / and contain only lowercase letters, numbers, and hyphens' })
+  .optional()
+  .nullable();
+
 const createCategorySchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
   parentId: z.string().optional(),
   iconUrl: iconUrlSchema.optional().nullable(),
   iconKey: iconKeySchema.optional().nullable(),
+  slug: slugSchema,
+  path: pathSchema,
 });
 
 const updateCategorySchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
-  description: z.string().nullable().optional(),
-  parentId: z.string().nullable().optional(),
+  description: z.string().optional().nullable(),
+  parentId: z.string().optional().nullable(),
   iconUrl: iconUrlSchema.optional().nullable(),
   iconKey: iconKeySchema.optional().nullable(),
+  slug: slugSchema,
+  path: pathSchema,
 });
 
 // ─── GET / — List all categories with hierarchy ───────────────────────────────
@@ -104,23 +126,38 @@ router.get('/with-latest', async (req: Request, res: Response) => {
       orderBy: { name: 'asc' },
     });
 
-    const withLatest = await Promise.all(
-      categories.map(async (cat) => {
-        const article = await prisma.article.findFirst({
-          where: { categoryId: cat.id, status: 'PUBLISHED' },
-          orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-            excerpt: true,
-            featuredImage: true,
-            publishedAt: true,
-          },
-        });
-        return { ...cat, article };
-      }),
-    );
+    // Fetch all latest articles in a single query to avoid N+1
+    const categoryIds = categories.map((c) => c.id);
+    const latestArticles = await prisma.article.findMany({
+      where: {
+        categoryId: { in: categoryIds },
+        status: 'PUBLISHED',
+      },
+      orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        excerpt: true,
+        featuredImage: true,
+        publishedAt: true,
+        categoryId: true,
+      },
+    });
+
+    // Create a map of categoryId -> latest article
+    const articleMap = new Map<string, typeof latestArticles[0]>();
+    for (const article of latestArticles) {
+      if (!articleMap.has(article.categoryId)) {
+        articleMap.set(article.categoryId, article);
+      }
+    }
+
+    // Map articles to categories
+    const withLatest = categories.map((cat) => ({
+      ...cat,
+      article: articleMap.get(cat.id) || null,
+    }));
 
     await setCached(cacheKey, withLatest, CATEGORY_TTL);
     await addTagsToKey(cacheKey, ['categories', 'articles']);
@@ -209,7 +246,7 @@ router.post(
     }
 
     try {
-      const { name, description, parentId, iconUrl, iconKey } = parsed.data;
+      const { name, description, parentId, iconUrl, iconKey, slug: customSlug, path: customPath } = parsed.data;
 
       // Verify parent exists if provided
       if (parentId) {
@@ -222,12 +259,27 @@ router.post(
         }
       }
 
-      const slug = await generateUniqueSlug(name, 'category');
+      // Use custom slug if provided, otherwise generate from name
+      let slug: string;
+      if (customSlug) {
+        // Check if custom slug already exists
+        const existing = await prisma.category.findUnique({ where: { slug: customSlug } });
+        if (existing) {
+          res.status(400).json({
+            error: { code: 'SLUG_EXISTS', message: 'A category with this slug already exists' },
+          });
+          return;
+        }
+        slug = customSlug;
+      } else {
+        slug = await generateUniqueSlug(name, 'category');
+      }
 
       const category = await prisma.category.create({
         data: {
           name,
           slug,
+          path: customPath ?? null,
           description: description ?? null,
           parentId: parentId ?? null,
           iconUrl: iconUrl ?? null,
@@ -284,7 +336,7 @@ router.put(
         return;
       }
 
-      const { name, description, parentId, iconUrl, iconKey } = parsed.data;
+const { name, description, parentId, iconUrl, iconKey, slug: customSlug, path: customPath } = parsed.data;
 
       // Verify parent exists if changing
       if (parentId !== undefined && parentId !== null) {
@@ -305,10 +357,38 @@ router.put(
         }
       }
 
-      // Regenerate slug if name changed
+      // Handle slug changes
       let newSlug: string | undefined;
-      if (name && name !== existing.name) {
+      if (customSlug !== undefined) {
+        // Custom slug provided - validate uniqueness
+        if (customSlug !== existing.slug) {
+          const existingWithSlug = await prisma.category.findUnique({ where: { slug: customSlug } });
+          if (existingWithSlug && existingWithSlug.id !== id) {
+            res.status(400).json({
+              error: { code: 'SLUG_EXISTS', message: 'A category with this slug already exists' },
+            });
+            return;
+          }
+          newSlug = customSlug;
+        }
+      } else if (name && name !== existing.name) {
+        // Name changed without custom slug - regenerate from name
         newSlug = await generateUniqueSlug(name, 'category');
+      }
+
+      // Handle path changes - validate uniqueness
+      let newPath: string | null | undefined;
+      if (customPath !== undefined) {
+        if (customPath !== existing.path) {
+          const existingWithPath = await prisma.category.findUnique({ where: { path: customPath! } });
+          if (existingWithPath && existingWithPath.id !== id) {
+            res.status(400).json({
+              error: { code: 'PATH_EXISTS', message: 'A category with this custom path already exists' },
+            });
+            return;
+          }
+          newPath = customPath;
+        }
       }
 
       const category = await prisma.category.update({
@@ -316,6 +396,7 @@ router.put(
         data: {
           ...(name !== undefined && { name }),
           ...(newSlug && { slug: newSlug }),
+          ...(customPath !== undefined && { path: customPath }),
           ...(description !== undefined && { description }),
           ...(parentId !== undefined && { parentId }),
           ...(iconUrl !== undefined && { iconUrl }),

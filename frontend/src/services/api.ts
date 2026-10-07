@@ -27,11 +27,16 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
+  path?: string | null;
   description?: string | null;
   iconUrl?: string | null;
   iconKey?: string | null;
   parentId?: string | null;
+  parent?: Pick<Category, 'id' | 'name' | 'slug'> | null;
   children?: Category[];
+  _count?: {
+    articles?: number;
+  };
 }
 
 export interface Tag {
@@ -184,6 +189,19 @@ export interface CategoryWithLatest {
   iconUrl?: string | null;
   iconKey?: string | null;
   article: CategoryLatestArticle | null;
+}
+
+/**
+ * Resolve the URL path for a category.
+ * If the category has a custom path, use it; otherwise default to /category/{slug}
+ */
+export function resolveCategoryPath(category: Category): string {
+  if (category.path && category.path.trim().length > 0) {
+    // Ensure path starts with /
+    const path = category.path.trim();
+    return path.startsWith('/') ? path : `/${path}`;
+  }
+  return `/category/${category.slug}`;
 }
 
 /** Categories paired with their latest published article — powers the category card row. */

@@ -11,7 +11,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 const PAGE_SIZE = 12;
 
 export const metadata: Metadata = {
-  title: "இரங்கல் - ஊரும் உறவும்",
+  title: "Obituary (அஞ்சலி) - ஊரும் உறவும்",
   description: "அனைத்து இரங்கல் மற்றும் அஞ்சலி குறிப்புகள்",
 };
 
@@ -75,7 +75,7 @@ export default async function ObituaryListPage({
     <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <Breadcrumb items={[
         { label: "முகப்பு", href: "/" },
-        { label: "இரங்கல்" },
+        { label: "Obituary (அஞ்சலி)" },
       ]} />
 
       {/* Header — stacks on phones rather than competing with the CTA for a
@@ -85,7 +85,7 @@ export default async function ObituaryListPage({
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <span className="w-1 h-6 bg-accent-red rounded-full" />
-            <h1 className="text-2xl font-bold">இரங்கல் / அஞ்சலி</h1>
+            <h1 className="text-2xl font-bold">Obituary (அஞ்சலி)</h1>
             <span className="hidden text-xs text-foreground/40 uppercase tracking-wider ml-1 sm:inline">Obituary · Tributes</span>
           </div>
           <p className="text-sm text-foreground/60">நினைவு, நெரும்பு மற்றும் அஞ்சலி குறிப்புகள்</p>
@@ -97,7 +97,7 @@ export default async function ObituaryListPage({
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
-          இரங்கல் பதிவிடு
+          Submit Obituary (அஞ்சலி)
         </Link>
       </div>
 
@@ -124,7 +124,7 @@ export default async function ObituaryListPage({
               href="/submit-obituary"
               className="bg-accent-red text-white px-5 py-2 rounded-full text-xs font-bold hover:bg-accent-red/85 transition-colors"
             >
-              இரங்கல் பதிவிடு
+              Submit Obituary (அஞ்சலி)
             </Link>
           </div>
         </div>

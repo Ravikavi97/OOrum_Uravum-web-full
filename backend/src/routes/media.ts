@@ -13,7 +13,10 @@ const router = Router();
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-const UPLOAD_PATH = process.env.MEDIA_UPLOAD_PATH || './uploads';
+const UPLOAD_PATH = process.env.MEDIA_UPLOAD_PATH;
+if (!UPLOAD_PATH) {
+  throw new Error('MEDIA_UPLOAD_PATH environment variable is not set');
+}
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 

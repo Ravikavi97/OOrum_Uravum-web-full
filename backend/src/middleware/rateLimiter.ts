@@ -23,7 +23,9 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const authReq = req as AuthenticatedRequest;
-    return authReq.user?.userId ?? 'unknown';
+    // Only authenticated users should reach this middleware
+    // If user is not authenticated, they share a generic limit
+    return authReq.user?.userId ?? 'unauthenticated';
   },
   handler: rateLimitHandler,
 });
@@ -35,7 +37,9 @@ export const uploadRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const authReq = req as AuthenticatedRequest;
-    return authReq.user?.userId ?? 'unknown';
+    // Only authenticated users should reach this middleware
+    // If user is not authenticated, they share a generic limit
+    return authReq.user?.userId ?? 'unauthenticated';
   },
   handler: (_req: Request, res: Response) => {
     res.status(429).json({

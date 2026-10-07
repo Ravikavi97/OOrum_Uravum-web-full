@@ -11,9 +11,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   try {
     const obit = await getObituaryBySlug(slug);
-    return { title: `${obit.name} - இரங்கல்` };
+    return { title: `${obit.name} - Obituary (அஞ்சலி)` };
   } catch {
-    return { title: "இரங்கல்" };
+    return { title: "Obituary (அஞ்சலி)" };
   }
 }
 
@@ -34,7 +34,7 @@ export default async function ObituaryPage({ params }: { params: Promise<{ slug:
     <main className="mx-auto max-w-3xl px-4 py-8">
       <Breadcrumb items={[
         { label: 'முகப்பு', href: '/' },
-        { label: 'இரங்கல்' },
+        { label: 'Obituary (அஞ்சலி)' },
       ]} />
 
       <article className="rounded-2xl bg-card-bg shadow-sm overflow-hidden">

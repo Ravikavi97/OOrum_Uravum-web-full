@@ -12,6 +12,7 @@ export interface CategoryCardItem {
     image: string | null;
     publishedAt: string | null;
   } | null;
+  isObituary?: boolean; // Flag to identify obituary cards
 }
 
 function fmtDate(d: string | null): string {
@@ -47,19 +48,38 @@ function CategoryCard({ item }: { item: CategoryCardItem }) {
     <div className="group flex h-full flex-col overflow-hidden rounded-2xl border border-foreground/10 bg-card-bg shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-accent-red/40 hover:shadow-md">
       <div className="relative h-40 w-full shrink-0 overflow-hidden bg-gray-100 sm:h-48">
         {article ? (
-          <ArticleImage
-            featuredImage={article.image}
-            title={article.title}
-            categoryName={item.name}
-            className="transition-transform duration-300 group-hover:scale-105"
-          />
+          item.isObituary ? (
+            // Special handling for obituary images (direct API endpoint)
+            <div className="relative h-full w-full">
+              {article.image ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={article.image}
+                  alt={article.title}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-gray-50">
+                  <EmptyGlyph />
+                </span>
+              )}
+            </div>
+          ) : (
+            <ArticleImage
+              featuredImage={article.image}
+              title={article.title}
+              categoryName={item.name}
+              className="transition-transform duration-300 group-hover:scale-105"
+            />
+          )
         ) : (
           <span className="flex h-full w-full items-center justify-center bg-gray-50">
             <EmptyGlyph />
           </span>
         )}
         <Link
-          href={`/category/${item.slug}`}
+          href={item.isObituary ? '/obituary' : `/category/${item.slug}`}
           className="absolute left-2.5 top-2.5 max-w-[85%] truncate rounded-full bg-accent-red px-3 py-1 text-[11px] font-bold text-white transition-colors hover:bg-accent-red/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-red focus-visible:ring-offset-1"
         >
           {item.name}
@@ -85,10 +105,10 @@ function CategoryCard({ item }: { item: CategoryCardItem }) {
         ) : (
           <>
             <span className="line-clamp-2 min-h-[3rem] text-[15px] font-bold leading-snug text-foreground/40">
-              No articles yet
+              {item.isObituary ? 'No obituaries yet' : 'No articles yet'}
             </span>
             <p className="mt-1.5 line-clamp-2 min-h-[2.75rem] text-xs leading-relaxed text-foreground/35">
-              Be the first to publish in this section
+              {item.isObituary ? 'Be the first to submit an obituary' : 'Be the first to publish in this section'}
             </p>
             <span className="mt-auto block pt-2.5 text-[11px] text-foreground/30">&nbsp;</span>
           </>

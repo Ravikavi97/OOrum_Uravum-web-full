@@ -295,6 +295,25 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       : null,
   }));
 
+  /* Add Obituary card to category cards if obituary category exists */
+  if (obituaryCat) {
+    const latestObit = obituaries[0];
+    categoryCards.push({
+      id: obituaryCat.id,
+      name: 'Obituary (அஞ்சலி)',
+      slug: obituaryCat.slug,
+      article: latestObit
+        ? {
+            title: latestObit.name,
+            href: `/obituary/${latestObit.slug}`,
+            excerpt: latestObit.content,
+            image: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/obituaries/${latestObit.id}/image`,
+            publishedAt: latestObit.publishedAt,
+          }
+        : null,
+    });
+  }
+
   /* ordered sections */
   const mainIds = ['videoHero', 'ticker', 'hero', 'topicCards', 'obituary', 'latestNews'];
   const orderedSections = (() => {

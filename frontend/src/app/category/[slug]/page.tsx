@@ -42,16 +42,32 @@ export default async function CategoryPage({ params, searchParams }: { params: P
   // Build category filter list: current category + all subcategories
   const categoryFilter = [slug, ...subcategories.map((c) => c.slug)];
 
+  // Fetch articles from current category only (not subcategories)
   let result;
   try {
     result = await getArticles({
-      category: categoryFilter.join(','),
+      category: slug,
       page,
       pageSize: 9,
       status: "PUBLISHED"
     });
   }
   catch { result = { data: [], total: 0, page: 1, pageSize: 9, totalPages: 0 }; }
+
+  // Fetch articles from subcategories
+  let subcategoryArticles: typeof result | undefined;
+  if (subcategories.length > 0) {
+    try {
+      subcategoryArticles = await getArticles({
+        category: subcategories.map((c) => c.slug).join(','),
+        page: 1,
+        pageSize: 6,
+        status: "PUBLISHED"
+      });
+    } catch {
+      subcategoryArticles = { data: [], total: 0, page: 1, pageSize: 6, totalPages: 0 };
+    }
+  }
 
   // Fetch standalone obituaries for the obituary category
   let obituaries: Obituary[] = [];
@@ -62,7 +78,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
     } catch { /* empty */ }
   }
 
-  const hasContent = result.data.length > 0 || obituaries.length > 0;
+  const hasContent = result.data.length > 0 || obituaries.length > 0 || (subcategoryArticles && subcategoryArticles.data.length > 0);
 
   // Build breadcrumb with full hierarchy
   const breadcrumbItems: Array<{ label: string; href?: string }> = [
@@ -107,16 +123,29 @@ export default async function CategoryPage({ params, searchParams }: { params: P
         </div>
       )}
 
-      {/* Articles in this category and subcategories */}
+      {/* Articles in this category (not subcategories) */}
       {result.data.length > 0 && (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4 text-foreground/80">
+            {subcategories.length > 0 ? `${category?.name || slug} Articles` : 'Articles'}
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {result.data.map((a) => <ArticleCard key={a.id} article={a} />)}
           </div>
           {result.totalPages > 1 && (
             <Pagination currentPage={page} totalPages={result.totalPages} basePath={`/category/${slug}`} />
           )}
-        </>
+        </div>
+      )}
+
+      {/* Articles from subcategories */}
+      {subcategoryArticles && subcategoryArticles.data.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-4 text-foreground/80">Articles from Subcategories</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {subcategoryArticles.data.map((a) => <ArticleCard key={a.id} article={a} />)}
+          </div>
+        </div>
       )}
 
       {/* Standalone obituaries (only for obituary category) */}

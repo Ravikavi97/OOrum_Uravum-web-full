@@ -21,10 +21,62 @@ const createObituarySchema = z.object({
 });
 
 const publicSubmitSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  content: z.string().min(1, 'Content is required'),
-  submitterName: z.string().min(1, 'Your name is required'),
-  submitterEmail: z.string().email('Valid email is required'),
+  // Required fields
+  firstName: z.string().min(1, 'First name is required'),
+  dateOfDeath: z.string().refine(val => !isNaN(Date.parse(val)), 'Valid date of death is required'),
+
+  // Optional fields
+  photo: z.any().optional(),
+  middleName: z.string().optional(),
+  surname: z.string().optional(),
+  otherNames: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  placeOfBirth: z.string().optional(),
+  lastResidentialAddress: z.string().optional(),
+  fatherName: z.string().optional(),
+  motherName: z.string().optional(),
+  maritalStatus: z.string().optional(),
+  spouseName: z.string().optional(),
+  brothersNames: z.string().optional(),
+  sistersNames: z.string().optional(),
+  fatherInLawName: z.string().optional(),
+  motherInLawName: z.string().optional(),
+  sonsNames: z.string().optional(),
+  daughtersNames: z.string().optional(),
+  sonsInLawNames: z.string().optional(),
+  daughtersInLawNames: z.string().optional(),
+  grandchildrenNames: z.string().optional(),
+  occupations: z.string().optional(),
+  hobbiesInterests: z.string().optional(),
+  communityActivities: z.string().optional(),
+  otherDetails: z.string().optional(),
+  lifeStory: z.string().optional(),
+
+  // Legacy support (will be migrated to firstName + surname)
+  name: z.string().optional(),
+  content: z.string().optional(),
+  submitterName: z.string().optional(),
+  submitterEmail: z.string().email('Valid email is required').optional(),
+}).refine((data) => {
+  // Validate date order: dateOfDeath >= dateOfBirth
+  if (data.dateOfBirth && data.dateOfDeath) {
+    const dob = new Date(data.dateOfBirth);
+    const dod = new Date(data.dateOfDeath);
+    if (dod < dob) {
+      return false;
+    }
+  }
+  // Validate dateOfDeath is not in the future
+  if (data.dateOfDeath) {
+    const dod = new Date(data.dateOfDeath);
+    if (dod > new Date()) {
+      return false;
+    }
+  }
+  return true;
+}, {
+  message: 'Date of death must be after date of birth and not in the future',
+  path: ['dateOfDeath'],
 });
 
 const updateObituarySchema = z.object({
@@ -38,7 +90,15 @@ const updateObituarySchema = z.object({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PNG, JPG, JPEG, or WEBP images are allowed'));
+    }
+  },
 });
 
 // â”€â”€â”€ Public submission rate limiter: 3 per hour per IP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -143,7 +203,7 @@ router.post(
     upload.single('image')(req, res, (err) => {
       if (err) {
         if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-          res.status(400).json({ error: { code: 'FILE_TOO_LARGE', message: 'File exceeds 10MB' } });
+          res.status(400).json({ error: { code: 'FILE_TOO_LARGE', message: 'File exceeds 5MB' } });
           return;
         }
         res.status(400).json({ error: { code: 'UPLOAD_ERROR', message: err.message } });
@@ -162,18 +222,54 @@ router.post(
     }
 
     try {
-      const { name, content, submitterName, submitterEmail } = parsed.data;
-      const slug = await generateUniqueSlug(name, 'obituary');
+      const data = parsed.data;
+
+      // Build display name from firstName + surname (or legacy name field)
+      const displayName = data.surname
+        ? `${data.firstName} ${data.surname}`.trim()
+        : (data.name || data.firstName);
+
+      const slug = await generateUniqueSlug(displayName, 'obituary');
+
+      // Build life story content from new fields or use legacy content
+      const lifeStoryContent = data.lifeStory || data.content || '';
 
       const obituary = await prisma.obituary.create({
         data: {
-          name,
+          name: displayName,
           slug,
-          content,
+          content: lifeStoryContent,
           status: 'PENDING',
-          submitterName,
-          submitterEmail,
+          submitterName: data.submitterName,
+          submitterEmail: data.submitterEmail,
           publishedAt: new Date(),
+          // New detailed fields
+          firstName: data.firstName,
+          middleName: data.middleName,
+          surname: data.surname,
+          otherNames: data.otherNames,
+          dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+          dateOfDeath: data.dateOfDeath ? new Date(data.dateOfDeath) : null,
+          placeOfBirth: data.placeOfBirth,
+          lastResidentialAddress: data.lastResidentialAddress,
+          fatherName: data.fatherName,
+          motherName: data.motherName,
+          maritalStatus: data.maritalStatus,
+          spouseName: data.spouseName,
+          brothersNames: data.brothersNames,
+          sistersNames: data.sistersNames,
+          fatherInLawName: data.fatherInLawName,
+          motherInLawName: data.motherInLawName,
+          sonsNames: data.sonsNames,
+          daughtersNames: data.daughtersNames,
+          sonsInLawNames: data.sonsInLawNames,
+          daughtersInLawNames: data.daughtersInLawNames,
+          grandchildrenNames: data.grandchildrenNames,
+          occupations: data.occupations,
+          hobbiesInterests: data.hobbiesInterests,
+          communityActivities: data.communityActivities,
+          otherDetails: data.otherDetails,
+          lifeStory: data.lifeStory,
           // Cast Buffer to Uint8Array<ArrayBuffer> for Prisma v6 Bytes field compatibility
           ...(req.file && { imageData: encryptImage(req.file.buffer) as unknown as Uint8Array<ArrayBuffer> }),
         },
@@ -183,8 +279,8 @@ router.post(
       // Create admin notification
       createAdminNotification({
         type: 'obituary_submission',
-        title: 'à®ªà¯à®¤à®¿à®¯ à®‡à®°à®™à¯à®•à®²à¯ à®šà®®à®°à¯à®ªà¯à®ªà®¿à®ªà¯à®ªà¯',
-        message: `${submitterName} submitted an obituary for "${name}"`,
+        title: 'புதிய இரங்கல் சமர்ப்பிக்க',
+        message: `${data.submitterName || 'Anonymous'} submitted an obituary for "${displayName}"`,
         link: '/obituaries',
       });
 
@@ -206,7 +302,7 @@ router.post(
     upload.single('image')(req, res, (err) => {
       if (err) {
         if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-          res.status(400).json({ error: { code: 'FILE_TOO_LARGE', message: 'File exceeds 10MB' } });
+          res.status(400).json({ error: { code: 'FILE_TOO_LARGE', message: 'File exceeds 5MB' } });
           return;
         }
         res.status(400).json({ error: { code: 'UPLOAD_ERROR', message: err.message } });
@@ -259,7 +355,7 @@ router.put(
     upload.single('image')(req, res, (err) => {
       if (err) {
         if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-          res.status(400).json({ error: { code: 'FILE_TOO_LARGE', message: 'File exceeds 10MB' } });
+          res.status(400).json({ error: { code: 'FILE_TOO_LARGE', message: 'File exceeds 5MB' } });
           return;
         }
         res.status(400).json({ error: { code: 'UPLOAD_ERROR', message: err.message } });

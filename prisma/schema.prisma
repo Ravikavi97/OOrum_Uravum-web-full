@@ -224,19 +224,50 @@ model IngestionLog {
 // ─── Obituary ────────────────────────────────────────────────────────────────
 
 model Obituary {
-  id             String   @id @default(cuid()) @db.VarChar(30)
-  name           String   @db.VarChar(500)
-  slug           String   @unique @db.VarChar(500)
-  content        String   @db.Text
-  sourceUrl      String?  @unique @map("source_url") @db.VarChar(2048)
-  imageData      Bytes?   @map("image_data") @db.LongBlob
-  status         String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
-  submitterName  String?  @map("submitter_name") @db.VarChar(255)
-  submitterEmail String?  @map("submitter_email") @db.VarChar(255)
-  publishedAt    DateTime @default(now()) @map("published_at")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id                      String   @id @default(cuid()) @db.VarChar(30)
+  name                    String   @db.VarChar(500)
+  slug                    String   @unique @db.VarChar(500)
+  content                 String   @db.Text
+  sourceUrl               String?  @unique @map("source_url") @db.VarChar(2048)
+  imageData               Bytes?   @map("image_data") @db.LongBlob
+  status                  String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
+  submitterName           String?  @map("submitter_name") @db.VarChar(255)
+  submitterEmail          String?  @map("submitter_email") @db.VarChar(255)
+  publishedAt             DateTime @default(now()) @map("published_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  // New detailed fields
+  firstName               String?  @map("first_name") @db.VarChar(100)
+  middleName              String?  @map("middle_name") @db.VarChar(100)
+  surname                 String?  @db.VarChar(100)
+  otherNames              String?  @map("other_names") @db.VarChar(255)
+  dateOfBirth             DateTime? @map("date_of_birth")
+  dateOfDeath             DateTime? @map("date_of_death")
+  placeOfBirth            String?  @map("place_of_birth") @db.VarChar(255)
+  lastResidentialAddress  String?  @map("last_residential_address") @db.Text
+  fatherName              String?  @map("father_name") @db.VarChar(150)
+  motherName              String?  @map("mother_name") @db.VarChar(150)
+  maritalStatus           String?  @map("marital_status") @db.VarChar(50)
+  spouseName              String?  @map("spouse_name") @db.VarChar(150)
+  brothersNames           String?  @map("brothers_names") @db.Text
+  sistersNames            String?  @map("sisters_names") @db.Text
+  fatherInLawName         String?  @map("father_in_law_name") @db.VarChar(150)
+  motherInLawName         String?  @map("mother_in_law_name") @db.VarChar(150)
+  sonsNames               String?  @map("sons_names") @db.Text
+  daughtersNames          String?  @map("daughters_names") @db.Text
+  sonsInLawNames          String?  @map("sons_in_law_names") @db.Text
+  daughtersInLawNames     String?  @map("daughters_in_law_names") @db.Text
+  grandchildrenNames      String?  @map("grandchildren_names") @db.Text
+  occupations             String?  @db.Text
+  hobbiesInterests        String?  @map("hobbies_interests") @db.Text
+  communityActivities     String?  @map("community_activities") @db.Text
+  otherDetails            String?  @map("other_details") @db.Text
+  lifeStory               String?  @map("life_story") @db.Text
 
   @@index([status])
+  @@index([dateOfDeath])
+  @@index([firstName, surname])
   @@map("obituaries")
 }
 

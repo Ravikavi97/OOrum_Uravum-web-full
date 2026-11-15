@@ -2,17 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 
-// ─── Mocks ───────────────────────────────────────────────────────────────────
-
 const mockQueryRaw = vi.fn();
-const mockArticleTagFindMany = vi.fn();
 
 vi.mock('../lib/prisma', () => ({
   prisma: {
-    $queryRaw: (...args: any[]) => mockQueryRaw(...args),
-    articleTag: {
-      findMany: (...args: any[]) => mockArticleTagFindMany(...args),
-    },
+    $queryRaw: (...args: unknown[]) => mockQueryRaw(...args),
   },
 }));
 
@@ -21,56 +15,54 @@ const mockSetCached = vi.fn();
 const mockAddTagsToKey = vi.fn();
 
 vi.mock('../lib/cache', () => ({
-  getCached: (...args: any[]) => mockGetCached(...args),
-  setCached: (...args: any[]) => mockSetCached(...args),
-  addTagsToKey: (...args: any[]) => mockAddTagsToKey(...args),
+  getCached: (...args: unknown[]) => mockGetCached(...args),
+  setCached: (...args: unknown[]) => mockSetCached(...args),
+  addTagsToKey: (...args: unknown[]) => mockAddTagsToKey(...args),
   SEARCH_TTL: 120,
 }));
-
-// ─── Test App Setup ──────────────────────────────────────────────────────────
 
 import searchRouter from './search';
 
 function createApp() {
   const app = express();
-  app.use(express.json());
   app.use('/api/search', searchRouter);
   return app;
 }
 
-// ─── Fixtures ────────────────────────────────────────────────────────────────
+const publishedAt = new Date('2026-01-15T12:00:00.000Z');
 
-const now = new Date();
-
-const sampleRow = {
-  id: 'art-1',
-  title: 'தமிழ் செய்தி',
-  slug: 'tamil-seithi',
-  excerpt: 'A Tamil news excerpt',
-  content: 'Full content here',
-  status: 'PUBLISHED',
-  is_breaking: 0,
-  featured_image: null,
-  published_at: now,
-  created_at: now,
-  updated_at: now,
-  relevance: 1.5,
-  author_id: 'user-1',
-  author_name: 'Author One',
-  author_slug: 'author-one',
-  author_profile_image: null,
-  category_id: 'cat-1',
-  category_name: 'அரசியல்',
-  category_slug: 'arasiyal',
-};
-
-const sampleTag = {
-  articleId: 'art-1',
-  tagId: 'tag-1',
-  tag: { id: 'tag-1', name: 'செய்தி', slug: 'seithi' },
-};
-
-// ─── Tests ───────────────────────────────────────────────────────────────────
+const sampleRows = [
+  {
+    id: 'article-1',
+    type: 'article',
+    title: 'தமிழ் செய்திகள்',
+    slug: 'tamil-news',
+    description: 'A Tamil news excerpt',
+    imageUrl: '/uploads/news.jpg',
+    publishedAt,
+    relevance: 0,
+  },
+  {
+    id: 'obituary-1',
+    type: 'obituary',
+    title: 'தமிழ் குடும்ப அஞ்சலி',
+    slug: 'tamil-family',
+    description: 'Obituary details',
+    imageUrl: null,
+    publishedAt,
+    relevance: 1,
+  },
+  {
+    id: 'video-1',
+    type: 'video',
+    title: 'தமிழ் காணொளி',
+    slug: 'tamil-video',
+    description: 'Video description',
+    imageUrl: 'https://example.com/video.jpg',
+    publishedAt,
+    relevance: 2,
+  },
+];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -80,148 +72,110 @@ beforeEach(() => {
 });
 
 describe('GET /api/search', () => {
-  // ─── Validation ──────────────────────────────────────────────────────
-
-  it('returns 400 when query is missing', async () => {
-    const app = createApp();
-    const res = await request(app).get('/api/search');
-
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_QUERY');
-  });
-
-  it('returns 400 when query is empty string', async () => {
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=');
+  it.each([
+    ['/api/search', 'missing query'],
+    ['/api/search?q=', 'empty query'],
+    ['/api/search?q=%20%20%20', 'whitespace query'],
+    ['/api/search?q=one+two+three+four+five+six+seven+eight+nine', 'too many terms'],
+    [`/api/search?q=${'a'.repeat(121)}`, 'query that is too long'],
+  ])('returns 400 for a %s', async (path) => {
+    const res = await request(createApp()).get(path);
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('INVALID_QUERY');
+    expect(mockQueryRaw).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when query is whitespace only', async () => {
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=%20%20%20');
+  it('returns articles, approved obituaries, and active videos in one paginated result', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ total: BigInt(3) }]);
+    mockQueryRaw.mockResolvedValueOnce(sampleRows);
 
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('INVALID_QUERY');
-  });
-
-  // ─── Successful search ──────────────────────────────────────────────
-
-  it('returns paginated results for a valid Tamil query', async () => {
-    // First call: count query
-    mockQueryRaw.mockResolvedValueOnce([{ total: BigInt(1) }]);
-    // Second call: data query
-    mockQueryRaw.mockResolvedValueOnce([sampleRow]);
-    mockArticleTagFindMany.mockResolvedValue([sampleTag]);
-
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=தமிழ்');
+    const res = await request(createApp()).get('/api/search?q=தமிழ்');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('data');
-    expect(res.body).toHaveProperty('total', 1);
-    expect(res.body).toHaveProperty('page', 1);
-    expect(res.body).toHaveProperty('pageSize', 10);
-    expect(res.body).toHaveProperty('totalPages', 1);
-    expect(res.body.data).toHaveLength(1);
-    expect(res.body.data[0].title).toBe('தமிழ் செய்தி');
-    expect(res.body.data[0].author.name).toBe('Author One');
-    expect(res.body.data[0].category.name).toBe('அரசியல்');
-    expect(res.body.data[0].tags).toHaveLength(1);
-    expect(res.body.data[0].tags[0].name).toBe('செய்தி');
+    expect(res.body).toMatchObject({
+      total: 3,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+    });
+    expect(res.body.data.map((item: { type: string }) => item.type)).toEqual([
+      'article',
+      'obituary',
+      'video',
+    ]);
+    expect(res.body.data[0]).toMatchObject({
+      id: 'article-1',
+      title: 'தமிழ் செய்திகள்',
+      slug: 'tamil-news',
+    });
+
+    const countSql = mockQueryRaw.mock.calls[0][0] as { sql: string };
+    expect(countSql.sql).toContain("a.status = 'PUBLISHED'");
+    expect(countSql.sql).toContain("o.status = 'APPROVED'");
+    expect(countSql.sql).toContain('vp.active = 1');
   });
 
-  // ─── Pagination ─────────────────────────────────────────────────────
+  it('normalizes whitespace and case in the search cache key', async () => {
+    mockQueryRaw.mockResolvedValueOnce([{ total: BigInt(0) }]);
 
-  it('respects page and pageSize query params', async () => {
+    const res = await request(createApp()).get('/api/search?q=News%20%20UPDATE');
+
+    expect(res.status).toBe(200);
+    expect(mockSetCached).toHaveBeenCalledWith(
+      'search:news%20update:1:10',
+      expect.objectContaining({ total: 0, page: 1, pageSize: 10 }),
+      120,
+    );
+    expect(mockAddTagsToKey).toHaveBeenCalledWith('search:news%20update:1:10', ['search']);
+  });
+
+  it('respects page parameters and caps page size', async () => {
     mockQueryRaw.mockResolvedValueOnce([{ total: BigInt(25) }]);
-    mockQueryRaw.mockResolvedValueOnce([sampleRow]);
-    mockArticleTagFindMany.mockResolvedValue([]);
+    mockQueryRaw.mockResolvedValueOnce([]);
 
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=test&page=2&pageSize=5');
+    const res = await request(createApp()).get('/api/search?q=test&page=2&pageSize=500');
 
     expect(res.status).toBe(200);
     expect(res.body.page).toBe(2);
-    expect(res.body.pageSize).toBe(5);
+    expect(res.body.pageSize).toBe(50);
     expect(res.body.total).toBe(25);
-    expect(res.body.totalPages).toBe(5);
+    expect(res.body.totalPages).toBe(1);
   });
 
-  it('defaults to page 1 and pageSize 10', async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ total: BigInt(0) }]);
-    mockQueryRaw.mockResolvedValueOnce([]);
-
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=test');
-
-    expect(res.status).toBe(200);
-    expect(res.body.page).toBe(1);
-    expect(res.body.pageSize).toBe(10);
-  });
-
-  // ─── Caching ────────────────────────────────────────────────────────
-
-  it('returns cached result when available', async () => {
-    const cachedResult = {
-      data: [],
-      total: 0,
+  it('returns cached results without querying the database', async () => {
+    const cachedResult = JSON.parse(JSON.stringify({
+      data: sampleRows,
+      total: 3,
       page: 1,
       pageSize: 10,
-      totalPages: 0,
-    };
+      totalPages: 1,
+    }));
     mockGetCached.mockResolvedValue(cachedResult);
 
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=cached');
+    const res = await request(createApp()).get('/api/search?q=cached');
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(cachedResult);
     expect(mockQueryRaw).not.toHaveBeenCalled();
   });
 
-  it('caches results with SEARCH_TTL (120s)', async () => {
-    mockQueryRaw.mockResolvedValueOnce([{ total: BigInt(1) }]);
-    mockQueryRaw.mockResolvedValueOnce([sampleRow]);
-    mockArticleTagFindMany.mockResolvedValue([]);
-
-    const app = createApp();
-    await request(app).get('/api/search?q=cache-test');
-
-    expect(mockSetCached).toHaveBeenCalledWith(
-      expect.stringContaining('search:'),
-      expect.objectContaining({ total: 1, page: 1, pageSize: 10 }),
-      120,
-    );
-    expect(mockAddTagsToKey).toHaveBeenCalledWith(
-      expect.stringContaining('search:'),
-      ['search'],
-    );
-  });
-
-  // ─── Empty results ──────────────────────────────────────────────────
-
-  it('returns empty data array when no results match', async () => {
+  it('returns an empty result set for no matches', async () => {
     mockQueryRaw.mockResolvedValueOnce([{ total: BigInt(0) }]);
-    mockQueryRaw.mockResolvedValueOnce([]);
 
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=nonexistent');
+    const res = await request(createApp()).get('/api/search?q=nonexistent');
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
     expect(res.body.total).toBe(0);
     expect(res.body.totalPages).toBe(0);
+    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
   });
 
-  // ─── Error handling ─────────────────────────────────────────────────
-
-  it('returns 500 on database error', async () => {
+  it('returns 500 on a database error', async () => {
     mockQueryRaw.mockRejectedValueOnce(new Error('DB connection failed'));
 
-    const app = createApp();
-    const res = await request(app).get('/api/search?q=error');
+    const res = await request(createApp()).get('/api/search?q=error');
 
     expect(res.status).toBe(500);
     expect(res.body.error.code).toBe('INTERNAL_ERROR');

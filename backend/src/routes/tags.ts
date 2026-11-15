@@ -87,7 +87,7 @@ router.post(
       });
 
       // Invalidate tag list cache
-      await invalidateByTags(['tags']);
+      await invalidateByTags(['tags', 'search']);
       revalidateFrontend();
 
       res.status(201).json(tag);
@@ -150,7 +150,7 @@ router.put(
       });
 
       // Invalidate caches
-      await invalidateByTags(['tags', `tag:${id}`]);
+      await invalidateByTags(['tags', 'search', `tag:${id}`]);
       revalidateFrontend();
 
       res.json(tag);
@@ -184,7 +184,7 @@ router.delete(
       await prisma.tag.delete({ where: { id } });
 
       // Invalidate caches
-      await invalidateByTags(['tags', `tag:${id}`]);
+      await invalidateByTags(['tags', 'search', `tag:${id}`]);
       revalidateFrontend();
 
       res.json({ message: 'Tag deleted successfully' });

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
+import { invalidateByTags } from '../lib/cache';
 import { generateUniqueSlug } from '../lib/slug';
 
 const router = Router();
@@ -116,6 +117,7 @@ router.post(
       });
 
       await logIngestion(sourceUrl, 'success', `Article created: ${article.id}`);
+      if (isPublished) await invalidateByTags(['search']);
 
       res.status(201).json(article);
     } catch (err) {

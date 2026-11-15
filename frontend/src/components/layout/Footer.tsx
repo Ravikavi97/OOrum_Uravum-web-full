@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getSiteSettings, getLogo, DEFAULT_LOGO_SRC } from '@/services/api';
+import { getSiteSettings, getLogo, DEFAULT_LOGO_SRC, resolveAssetUrl } from '@/services/api';
+import { useSiteSettingsPreview } from '@/contexts/SiteSettingsPreviewContext';
 import VisitorStats from '@/components/ui/VisitorStats';
 
 const DEFAULT_SITE_NAME   = 'OORUM URAVUM';
@@ -69,6 +70,7 @@ export default function Footer() {
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [footerLogo,  setFooterLogo]  = useState(DEFAULT_LOGO_SRC);
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
+  const preview = useSiteSettingsPreview();
 
   useEffect(() => {
     getSiteSettings().then((s) => {
@@ -85,7 +87,14 @@ export default function Footer() {
     getLogo('footer').then(setFooterLogo).catch(() => {});
   }, []);
 
-  const activeSocials = Object.entries(socialLinks).filter(([, url]) => !!url);
+  const displaySiteName = preview?.siteTitle ?? siteName;
+  const displayTagline = preview?.siteTagline ?? tagline;
+  const displayDescription = preview?.siteDescription ?? description;
+  const displayFooterLogo = preview
+    ? resolveAssetUrl(preview.footerLogo) ?? DEFAULT_LOGO_SRC
+    : footerLogo;
+  const displaySocialLinks = preview?.socialLinks ?? socialLinks;
+  const activeSocials = Object.entries(displaySocialLinks).filter(([, url]) => !!url);
 
   return (
     <footer className="bg-primary-dark text-white mt-auto">
@@ -101,18 +110,18 @@ export default function Footer() {
                 `lg:col-span-2` column. `onError` swaps in the bundled wordmark so a
                 dead upload URL degrades to the default logo. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={footerLogo} alt={siteName} width={67} height={48}
+              <img src={displayFooterLogo} alt={displaySiteName} width={67} height={48}
                 onError={(e) => {
                   if (e.currentTarget.src.endsWith(DEFAULT_LOGO_SRC)) return;
                   e.currentTarget.src = DEFAULT_LOGO_SRC;
                 }}
                 className="h-12 w-auto max-w-[160px] object-contain shrink-0" />
               <div>
-                <span className="block text-xl font-extrabold text-white tracking-wide">{siteName}</span>
-                <span className="block text-[11px] text-white/45 mt-0.5">{tagline}</span>
+                <span className="block text-xl font-extrabold text-white tracking-wide">{displaySiteName}</span>
+                <span className="block text-[11px] text-white/45 mt-0.5">{displayTagline}</span>
               </div>
             </Link>
-            <p className="text-sm text-white/55 leading-relaxed max-w-sm">{description}</p>
+            <p className="text-sm text-white/55 leading-relaxed max-w-sm">{displayDescription}</p>
             {/* Social icons */}
             {activeSocials.length > 0 && (
               <div className="flex gap-2.5 mt-5 flex-wrap">

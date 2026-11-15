@@ -9,6 +9,7 @@ export interface AuthPayload {
   userId: string;
   email: string;
   role: string;
+  name?: string;
 }
 
 export interface AuthenticatedRequest extends Request {

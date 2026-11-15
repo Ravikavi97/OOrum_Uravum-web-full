@@ -31,6 +31,10 @@ vi.mock('../lib/cache', () => ({
   invalidateByTags: (...args: any[]) => mockInvalidateByTags(...args),
 }));
 
+vi.mock('../lib/notify', () => ({
+  createAdminNotification: vi.fn(),
+}));
+
 // Mock auth middleware
 vi.mock('../lib/auth', () => ({
   requireAuth: (req: any, res: any, next: any) => {
@@ -38,6 +42,11 @@ vi.mock('../lib/auth', () => ({
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         error: { code: 'UNAUTHORIZED', message: 'Missing or invalid Authorization header' },
+      });
+    }
+    if (authHeader === 'Bearer invalid-token') {
+      return res.status(401).json({
+        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' },
       });
     }
     const testUser = req.headers['x-test-user'];
@@ -99,13 +108,19 @@ const sampleObituary2 = {
 
 const editorUser = JSON.stringify({ userId: 'user-2', email: 'editor@test.com', role: 'EDITOR' });
 const adminUser = JSON.stringify({ userId: 'user-3', email: 'admin@test.com', role: 'ADMIN' });
-const authorUser = JSON.stringify({ userId: 'user-1', email: 'author@test.com', role: 'AUTHOR' });
+const authorUser = JSON.stringify({
+  userId: 'user-1',
+  email: 'author@test.com',
+  name: 'Signed-in Test User',
+  role: 'AUTHOR',
+});
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockInvalidateByTags.mockResolvedValue(undefined);
+  mockObituaryFindUnique.mockResolvedValue(null);
 });
 
 // ─── GET / — List obituaries ─────────────────────────────────────────────────
@@ -123,6 +138,116 @@ describe('GET /api/obituaries', () => {
     expect(res.body.total).toBe(2);
     expect(res.body.page).toBe(1);
     expect(res.body.data[0].name).toBe('திரு. முருகன்');
+    expect(mockObituaryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'APPROVED' } }),
+    );
+  });
+
+  it('lets Admins filter submissions by review status', async () => {
+    mockObituaryFindMany.mockResolvedValue([]);
+    mockObituaryCount.mockResolvedValue(0);
+
+    const app = createApp();
+    const res = await request(app)
+      .get('/api/obituaries?status=PENDING')
+      .set('Authorization', 'Bearer test')
+      .set('x-test-user', adminUser);
+
+    expect(res.status).toBe(200);
+    expect(mockObituaryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'PENDING' } }),
+    );
+  });
+
+  it('does not expose pending submissions to Authors', async () => {
+    mockObituaryFindMany.mockResolvedValue([]);
+    mockObituaryCount.mockResolvedValue(0);
+
+    const app = createApp();
+    const res = await request(app)
+      .get('/api/obituaries?status=PENDING')
+      .set('Authorization', 'Bearer test')
+      .set('x-test-user', authorUser);
+
+    expect(res.status).toBe(200);
+    expect(mockObituaryFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: 'APPROVED' } }),
+    );
+  });
+});
+
+describe('POST /api/obituaries/submit', () => {
+  it('stores the submitted photo and keeps the obituary pending review', async () => {
+    mockObituaryCreate.mockResolvedValue({
+      ...sampleObituary,
+      status: 'PENDING',
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/obituaries/submit')
+      .field('firstName', 'Test Person')
+      .field('dateOfDeath', '2020-01-01')
+      .field('lifeStory', 'A life story')
+      .field('submitterName', 'Forged Name')
+      .field('submitterEmail', 'forged@example.com')
+      .attach('photo', Buffer.from('fake-image-data'), 'portrait.png');
+
+    expect(res.status).toBe(201);
+    expect(res.body.obituary.status).toBe('PENDING');
+    expect(mockObituaryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'PENDING',
+          submitterName: 'Anonymous',
+          submitterEmail: null,
+          firstName: 'Test Person',
+          lifeStory: 'A life story',
+          imageMimeType: 'image/png',
+          imageData: expect.any(Uint8Array),
+        }),
+      }),
+    );
+  });
+
+  it('uses the verified signed-in user and ignores submitted identity fields', async () => {
+    mockObituaryCreate.mockResolvedValue({
+      ...sampleObituary,
+      status: 'PENDING',
+    });
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/obituaries/submit')
+      .set('Authorization', 'Bearer test-token')
+      .set('x-test-user', authorUser)
+      .field('firstName', 'Test Person')
+      .field('dateOfDeath', '2020-01-01')
+      .field('submitterName', 'Forged Name')
+      .field('submitterEmail', 'forged@example.com');
+
+    expect(res.status).toBe(201);
+    expect(mockObituaryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          submitterName: 'Signed-in Test User',
+          submitterEmail: 'author@test.com',
+        }),
+      }),
+    );
+  });
+
+  it('rejects an invalid supplied token instead of silently submitting anonymously', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/obituaries/submit')
+      .set('Authorization', 'Bearer invalid-token')
+      .field('firstName', 'Test Person')
+      .field('dateOfDeath', '2020-01-01');
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHORIZED');
+    expect(mockObituaryCreate).not.toHaveBeenCalled();
   });
 });
 
@@ -151,6 +276,11 @@ describe('POST /api/obituaries', () => {
       .field('content', validBody.content);
 
     expect(res.status).toBe(201);
+    expect(mockObituaryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'PENDING' }),
+      }),
+    );
   });
 
   it('allows Editor role to create obituary', async () => {
@@ -193,6 +323,27 @@ describe('POST /api/obituaries', () => {
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
   });
 
+  it('stores image-library URLs on admin-created obituaries', async () => {
+    mockObituaryCreate.mockResolvedValue(sampleObituary);
+    const imageUrl = 'https://media.example.com/obituary.jpg';
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/obituaries')
+      .set('Authorization', 'Bearer test')
+      .set('x-test-user', editorUser)
+      .field('name', validBody.name)
+      .field('content', validBody.content)
+      .field('imageUrl', imageUrl);
+
+    expect(res.status).toBe(201);
+    expect(mockObituaryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ imageUrl }),
+      }),
+    );
+  });
+
   it('validates request body (400 on missing content)', async () => {
     const app = createApp();
     const res = await request(app)
@@ -203,6 +354,21 @@ describe('POST /api/obituaries', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('rejects dates of death in the future', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/obituaries')
+      .set('Authorization', 'Bearer test-token')
+      .set('x-test-user', editorUser)
+      .field('name', validBody.name)
+      .field('content', validBody.content)
+      .field('dateOfDeath', '2999-01-01');
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockObituaryCreate).not.toHaveBeenCalled();
   });
 
   it('creates obituary with image upload', async () => {
@@ -223,6 +389,40 @@ describe('POST /api/obituaries', () => {
         data: expect.objectContaining({
           name: validBody.name,
           content: validBody.content,
+          imageData: expect.any(Uint8Array),
+        }),
+      }),
+    );
+  });
+
+  it('persists full obituary details and an uploaded image for dashboard creation', async () => {
+    mockObituaryCreate.mockResolvedValue(sampleObituary);
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/obituaries')
+      .set('Authorization', 'Bearer test-token')
+      .set('x-test-user', editorUser)
+      .field('name', 'First Middle Last')
+      .field('content', 'Admin-written publication content')
+      .field('firstName', 'First')
+      .field('middleName', 'Middle')
+      .field('surname', 'Last')
+      .field('dateOfDeath', '2020-01-01')
+      .field('lifeStory', 'Life story submitted with the details')
+      .attach('image', Buffer.from('fake-image-data'), 'portrait.png');
+
+    expect(res.status).toBe(201);
+    expect(mockObituaryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: 'First Middle Last',
+          content: 'Admin-written publication content',
+          firstName: 'First',
+          middleName: 'Middle',
+          surname: 'Last',
+          dateOfDeath: new Date('2020-01-01'),
+          lifeStory: 'Life story submitted with the details',
+          imageMimeType: 'image/png',
           imageData: expect.any(Uint8Array),
         }),
       }),
@@ -263,7 +463,7 @@ describe('POST /api/obituaries', () => {
       .field('name', validBody.name)
       .field('content', validBody.content);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['obituaries']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['obituaries', 'search']);
   });
 });
 
@@ -308,6 +508,37 @@ describe('PUT /api/obituaries/:id', () => {
     expect(res.body.error.code).toBe('NOT_FOUND');
   });
 
+  it('prevents Authors from approving or rejecting submissions', async () => {
+    mockObituaryFindUnique.mockResolvedValue(sampleObituary);
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/obituaries/obit-1')
+      .set('Authorization', 'Bearer test')
+      .set('x-test-user', authorUser)
+      .send({ status: 'APPROVED' });
+
+    expect(res.status).toBe(403);
+    expect(mockObituaryUpdate).not.toHaveBeenCalled();
+  });
+
+  it('publishes the obituary at approval time', async () => {
+    mockObituaryFindUnique.mockResolvedValue({ ...sampleObituary, status: 'PENDING' });
+    mockObituaryUpdate.mockResolvedValue({ ...sampleObituary, status: 'APPROVED' });
+
+    const app = createApp();
+    const beforeApproval = Date.now();
+    const res = await request(app)
+      .put('/api/obituaries/obit-1')
+      .set('Authorization', 'Bearer test')
+      .set('x-test-user', adminUser)
+      .send({ status: 'APPROVED' });
+
+    expect(res.status).toBe(200);
+    const updateData = mockObituaryUpdate.mock.calls[0][0].data;
+    expect(updateData.status).toBe('APPROVED');
+    expect(updateData.publishedAt.getTime()).toBeGreaterThanOrEqual(beforeApproval);
+  });
+
   it('updates obituary name and content', async () => {
     mockObituaryFindUnique.mockResolvedValue(sampleObituary);
     const updated = { ...sampleObituary, name: 'Updated Name', content: 'Updated content' };
@@ -328,6 +559,39 @@ describe('PUT /api/obituaries/:id', () => {
         data: expect.objectContaining({
           name: 'Updated Name',
           content: 'Updated content',
+        }),
+      }),
+    );
+  });
+
+  it('saves editorial content and complete submission details before approval', async () => {
+    mockObituaryFindUnique.mockResolvedValue({ ...sampleObituary, status: 'PENDING' });
+    mockObituaryUpdate.mockResolvedValue({ ...sampleObituary, status: 'APPROVED' });
+
+    const app = createApp();
+    const res = await request(app)
+      .put('/api/obituaries/obit-1')
+      .set('Authorization', 'Bearer test-token')
+      .set('x-test-user', adminUser)
+      .field('name', 'First Last')
+      .field('content', 'Approved publication content')
+      .field('firstName', 'First')
+      .field('surname', 'Last')
+      .field('dateOfDeath', '2020-01-01')
+      .field('lifeStory', 'Original submitted story')
+      .field('status', 'APPROVED');
+
+    expect(res.status).toBe(200);
+    expect(mockObituaryUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: 'First Last',
+          content: 'Approved publication content',
+          firstName: 'First',
+          surname: 'Last',
+          dateOfDeath: new Date('2020-01-01'),
+          lifeStory: 'Original submitted story',
+          status: 'APPROVED',
         }),
       }),
     );
@@ -388,7 +652,7 @@ describe('PUT /api/obituaries/:id', () => {
       .set('x-test-user', editorUser)
       .field('name', 'Updated');
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['obituaries', 'obituary:obit-1']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['obituaries', 'search', 'obituary:obit-1']);
   });
 });
 
@@ -438,7 +702,7 @@ describe('DELETE /api/obituaries/:id', () => {
       .set('x-test-user', editorUser);
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toBe('Obituary deleted successfully');
+    expect(res.body.message).toBe('Obituary deleted');
     expect(mockObituaryDelete).toHaveBeenCalledWith({ where: { id: 'obit-1' } });
   });
 
@@ -453,7 +717,7 @@ describe('DELETE /api/obituaries/:id', () => {
       .set('x-test-user', adminUser);
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toBe('Obituary deleted successfully');
+    expect(res.body.message).toBe('Obituary deleted');
   });
 
   it('invalidates obituary cache on delete', async () => {
@@ -466,6 +730,6 @@ describe('DELETE /api/obituaries/:id', () => {
       .set('Authorization', 'Bearer test-token')
       .set('x-test-user', editorUser);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['obituaries', 'obituary:obit-1']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['obituaries', 'search', 'obituary:obit-1']);
   });
 });

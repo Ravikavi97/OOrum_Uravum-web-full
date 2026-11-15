@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getObituaries } from "@/services/api";
+import { getObituaries, getObituaryImageUrl } from "@/services/api";
 import type { Obituary } from "@/services/api";
 import Breadcrumb from "@/components/ui/Breadcrumb";
 import Pagination from "@/components/ui/Pagination";
+import ObituaryPhoto from "@/components/ui/ObituaryPhoto";
+import ObituaryPlaceholder from "@/components/ui/ObituaryPlaceholder";
 
 export const revalidate = 10;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 const PAGE_SIZE = 12;
 
 export const metadata: Metadata = {
@@ -26,17 +27,17 @@ function excerptOf(content: string): string {
 }
 
 function ObituaryCard({ obit }: { obit: Obituary }) {
+  const imageUrl = getObituaryImageUrl(obit);
+
   return (
     <Link
       href={`/obituary/${obit.slug}`}
       className="group bg-card-bg rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 flex flex-col"
     >
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-gray-100">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`${API_URL}/obituaries/${obit.id}/image`}
+        <ObituaryPhoto
+          src={imageUrl}
           alt={obit.name}
-          loading="lazy"
           className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
         />
       </div>
@@ -114,10 +115,8 @@ export default async function ObituaryListPage({
       ) : (
         <div className="py-20 text-center">
           <div className="inline-flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-accent-red/10 flex items-center justify-center">
-              <svg className="w-8 h-8 text-accent-red/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-7-10a7 7 0 1114 0c0 5.5-7 10-7 10z" />
-              </svg>
+            <div className="w-16 h-16 overflow-hidden rounded-full">
+              <ObituaryPlaceholder />
             </div>
             <p className="text-sm text-foreground/50">இரங்கல் குறிப்புகள் இன்னும் வெளியிடப்படவில்லை.</p>
             <Link

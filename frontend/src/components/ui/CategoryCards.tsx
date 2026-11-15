@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { ArticleImage } from '@/components/article/ArticleCard';
+import ObituaryPlaceholder from '@/components/ui/ObituaryPlaceholder';
+import ObituaryPhoto from '@/components/ui/ObituaryPhoto';
 
 export interface CategoryCardItem {
   id: string;
@@ -51,19 +53,11 @@ function CategoryCard({ item }: { item: CategoryCardItem }) {
           item.isObituary ? (
             // Special handling for obituary images (direct API endpoint)
             <div className="relative h-full w-full">
-              {article.image ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={article.image}
-                  alt={article.title}
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center bg-gray-50">
-                  <EmptyGlyph />
-                </span>
-              )}
+            <ObituaryPhoto
+              src={article.image}
+              alt={article.title}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
             </div>
           ) : (
             <ArticleImage
@@ -74,9 +68,11 @@ function CategoryCard({ item }: { item: CategoryCardItem }) {
             />
           )
         ) : (
-          <span className="flex h-full w-full items-center justify-center bg-gray-50">
-            <EmptyGlyph />
-          </span>
+          item.isObituary ? <ObituaryPlaceholder /> : (
+            <span className="flex h-full w-full items-center justify-center bg-gray-50">
+              <EmptyGlyph />
+            </span>
+          )
         )}
         <Link
           href={item.isObituary ? '/obituary' : `/category/${item.slug}`}
@@ -125,8 +121,8 @@ export default function CategoryCards({ items = [] }: { items?: CategoryCardItem
     <div className="mt-10">
       <div className="mb-4 flex items-center gap-2">
         <span className="h-6 w-1 rounded-full bg-accent-red" />
-        <h2 className="text-xl font-bold">Browse by Category</h2>
-        <span className="text-xs uppercase tracking-wider text-foreground/40">Latest in each section</span>
+        {/* <h2 className="text-xl font-bold">Browse by Category</h2>
+        <span className="text-xs uppercase tracking-wider text-foreground/40">Latest in each section</span> */}
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

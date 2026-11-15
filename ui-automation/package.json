@@ -1,0 +1,16 @@
+{
+  "name": "oorum-uravum-obituary-ui-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Playwright UI automation for public obituary submissions and publisher review",
+  "scripts": {
+    "test": "playwright test --headed",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "dotenv": "^17.2.3"
+  }
+}

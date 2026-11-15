@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { useUserAuth } from '@/contexts/UserAuthContext';
 import Breadcrumb from '@/components/ui/Breadcrumb';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-
 interface FormData {
   photo: File | null;
   firstName: string;
@@ -35,8 +33,6 @@ interface FormData {
   communityActivities: string;
   otherDetails: string;
   lifeStory: string;
-  submitterName: string;
-  submitterEmail: string;
 }
 
 const initialFormData: FormData = {
@@ -67,12 +63,14 @@ const initialFormData: FormData = {
   communityActivities: '',
   otherDetails: '',
   lifeStory: '',
-  submitterName: '',
-  submitterEmail: '',
 };
 
 export default function SubmitObituaryPage() {
-  const { user } = useUserAuth();
+  const { token, loading: authLoading } = useUserAuth();
+  const now = new Date();
+  const latestDateOfDeath = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const latestDateOfBirth = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -82,21 +80,17 @@ export default function SubmitObituaryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  // Auto-fill submitter info from logged-in user
   useEffect(() => {
-    if (user) {
-      setFormData(prev => ({
-        ...prev,
-        submitterName: user.name,
-        submitterEmail: user.email,
-      }));
-    }
-  }, [user]);
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
 
   const handleFileChange = (file: File | null) => {
     if (!file) {
       setFormData(prev => ({ ...prev, photo: null }));
       setImagePreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
@@ -104,12 +98,14 @@ export default function SubmitObituaryPage() {
     const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       setError('Only PNG, JPG, JPEG, or WEBP images are allowed');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError('Image must be less than 5MB');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
@@ -127,6 +123,20 @@ export default function SubmitObituaryPage() {
         delete newErrors[field];
         return newErrors;
       });
+    }
+  };
+
+  const handleDateOfDeathChange = (value: string) => {
+    handleInputChange('dateOfDeath', value);
+    if (value && value > latestDateOfDeath) {
+      setFieldErrors(prev => ({ ...prev, dateOfDeath: 'Date of death cannot be in the future' }));
+    }
+  };
+
+  const handleDateOfBirthChange = (value: string) => {
+    handleInputChange('dateOfBirth', value);
+    if (value && value > latestDateOfBirth) {
+      setFieldErrors(prev => ({ ...prev, dateOfBirth: 'Date of birth must be before today' }));
     }
   };
 
@@ -155,17 +165,12 @@ export default function SubmitObituaryPage() {
     setImagePreview(null);
     setFieldErrors({});
     setError('');
-    if (user) {
-      setFormData(prev => ({
-        ...initialFormData,
-        submitterName: user.name,
-        submitterEmail: user.email,
-      }));
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (authLoading) return;
     setError('');
     setFieldErrors({});
     setSubmitting(true);
@@ -203,18 +208,20 @@ export default function SubmitObituaryPage() {
       if (formData.communityActivities) fd.append('communityActivities', formData.communityActivities);
       if (formData.otherDetails) fd.append('otherDetails', formData.otherDetails);
       if (formData.lifeStory) fd.append('lifeStory', formData.lifeStory);
-      if (formData.submitterName) fd.append('submitterName', formData.submitterName);
-      if (formData.submitterEmail) fd.append('submitterEmail', formData.submitterEmail);
 
-      const res = await fetch(`${API_URL}/obituaries/submit`, {
+      const res = await fetch('/api/obituaries/submit', {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: fd,
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.error?.details) {
-          setFieldErrors(data.error.details as Record<string, string>);
+          const details = data.error.details as Record<string, string[]>;
+          setFieldErrors(Object.fromEntries(
+            Object.entries(details).map(([field, messages]) => [field, messages[0] ?? 'Invalid value']),
+          ));
           throw new Error('Please fix the errors above');
         }
         throw new Error(data.error?.message || 'Submission failed');
@@ -271,6 +278,11 @@ export default function SubmitObituaryPage() {
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 mb-6 text-sm">{error}</div>
+        )}
+        {!authLoading && (
+          <p className="mb-4 text-sm text-foreground/60" role="status">
+            {token ? 'Submitting as your signed-in account.' : 'Submitting anonymously. Sign in to include your account details.'}
+          </p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -396,11 +408,17 @@ export default function SubmitObituaryPage() {
                 <input
                   id="dateOfBirth"
                   type="date"
+                  max={latestDateOfBirth}
                   value={formData.dateOfBirth}
-                  onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
+                  onChange={(e) => handleDateOfBirthChange(e.target.value)}
                   placeholder="dd/mm/yyyy"
-                  className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red"
+                  className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red ${fieldErrors.dateOfBirth ? 'border-red-500' : ''}`}
+                  aria-invalid={!!fieldErrors.dateOfBirth}
+                  aria-describedby={fieldErrors.dateOfBirth ? 'dateOfBirth-error' : undefined}
                 />
+                {fieldErrors.dateOfBirth && (
+                  <p id="dateOfBirth-error" className="text-xs text-red-500 mt-1">{fieldErrors.dateOfBirth}</p>
+                )}
               </div>
               <div>
                 <label htmlFor="dateOfDeath" className="block text-sm font-medium mb-1">
@@ -409,8 +427,9 @@ export default function SubmitObituaryPage() {
                 <input
                   id="dateOfDeath"
                   type="date"
+                  max={latestDateOfDeath}
                   value={formData.dateOfDeath}
-                  onChange={(e) => handleInputChange('dateOfDeath', e.target.value)}
+                  onChange={(e) => handleDateOfDeathChange(e.target.value)}
                   required
                   placeholder="dd/mm/yyyy"
                   className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red ${fieldErrors.dateOfDeath ? 'border-red-500' : ''}`}
@@ -453,24 +472,24 @@ export default function SubmitObituaryPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="fatherName" className="block text-sm font-medium mb-1">Father's Name</label>
+                <label htmlFor="fatherName" className="block text-sm font-medium mb-1">Father&apos;s Name</label>
                 <input
                   id="fatherName"
                   type="text"
                   value={formData.fatherName}
                   onChange={(e) => handleInputChange('fatherName', e.target.value)}
-                  placeholder="Father's name"
+                  placeholder="Father&apos;s name"
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red"
                 />
               </div>
               <div>
-                <label htmlFor="motherName" className="block text-sm font-medium mb-1">Mother's Name</label>
+                <label htmlFor="motherName" className="block text-sm font-medium mb-1">Mother&apos;s Name</label>
                 <input
                   id="motherName"
                   type="text"
                   value={formData.motherName}
                   onChange={(e) => handleInputChange('motherName', e.target.value)}
-                  placeholder="Mother's name"
+                  placeholder="Mother&apos;s name"
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red"
                 />
               </div>
@@ -499,13 +518,13 @@ export default function SubmitObituaryPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor="spouseName" className="block text-sm font-medium mb-1">Wife's Name / Husband's Name</label>
+                <label htmlFor="spouseName" className="block text-sm font-medium mb-1">Wife&apos;s Name / Husband&apos;s Name</label>
                 <input
                   id="spouseName"
                   type="text"
                   value={formData.spouseName}
                   onChange={(e) => handleInputChange('spouseName', e.target.value)}
-                  placeholder="Spouse's name"
+                  placeholder="Spouse&apos;s name"
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red"
                 />
               </div>
@@ -532,24 +551,24 @@ export default function SubmitObituaryPage() {
                 />
               </div>
               <div>
-                <label htmlFor="fatherInLawName" className="block text-sm font-medium mb-1">Father-in-Law's Name</label>
+                <label htmlFor="fatherInLawName" className="block text-sm font-medium mb-1">Father-in-Law&apos;s Name</label>
                 <input
                   id="fatherInLawName"
                   type="text"
                   value={formData.fatherInLawName}
                   onChange={(e) => handleInputChange('fatherInLawName', e.target.value)}
-                  placeholder="Father-in-law's name"
+                  placeholder="Father-in-law&apos;s name"
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red"
                 />
               </div>
               <div>
-                <label htmlFor="motherInLawName" className="block text-sm font-medium mb-1">Mother-in-Law's Name</label>
+                <label htmlFor="motherInLawName" className="block text-sm font-medium mb-1">Mother-in-Law&apos;s Name</label>
                 <input
                   id="motherInLawName"
                   type="text"
                   value={formData.motherInLawName}
                   onChange={(e) => handleInputChange('motherInLawName', e.target.value)}
-                  placeholder="Mother-in-law's name"
+                  placeholder="Mother-in-law&apos;s name"
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red"
                 />
               </div>
@@ -585,7 +604,7 @@ export default function SubmitObituaryPage() {
                 />
               </div>
               <div>
-                <label htmlFor="sonsInLawNames" className="block text-sm font-medium mb-1">Son(s)-in-Law / Son's Wife Name(s)</label>
+                <label htmlFor="sonsInLawNames" className="block text-sm font-medium mb-1">Son(s)-in-Law / Son&apos;s Wife Name(s)</label>
                 <textarea
                   id="sonsInLawNames"
                   value={formData.sonsInLawNames}
@@ -596,7 +615,7 @@ export default function SubmitObituaryPage() {
                 />
               </div>
               <div>
-                <label htmlFor="daughtersInLawNames" className="block text-sm font-medium mb-1">Daughter(s)-in-Law / Daughter's Husband Name(s)</label>
+                <label htmlFor="daughtersInLawNames" className="block text-sm font-medium mb-1">Daughter(s)-in-Law / Daughter&apos;s Husband Name(s)</label>
                 <textarea
                   id="daughtersInLawNames"
                   value={formData.daughtersInLawNames}
@@ -607,13 +626,13 @@ export default function SubmitObituaryPage() {
                 />
               </div>
               <div>
-                <label htmlFor="grandchildrenNames" className="block text-sm font-medium mb-1">Grandchildren's Names</label>
+                <label htmlFor="grandchildrenNames" className="block text-sm font-medium mb-1">Grandchildren&apos;s Names</label>
                 <textarea
                   id="grandchildrenNames"
                   value={formData.grandchildrenNames}
                   onChange={(e) => handleInputChange('grandchildrenNames', e.target.value)}
                   rows={2}
-                  placeholder="Grandchildren's names"
+                  placeholder="Grandchildren&apos;s names"
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red resize-y"
                 />
               </div>
@@ -685,7 +704,7 @@ export default function SubmitObituaryPage() {
                 value={formData.lifeStory}
                 onChange={(e) => handleInputChange('lifeStory', e.target.value)}
                 rows={8}
-                placeholder="Briefly describe the person's life, experiences, and contributions to family or community."
+                placeholder="Briefly describe the person&apos;s life, experiences, and contributions to family or community."
                 className="w-full border rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-accent-red/30 focus:border-accent-red resize-y min-h-[220px]"
               />
             </div>
@@ -703,7 +722,7 @@ export default function SubmitObituaryPage() {
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || authLoading}
               className="flex-1 px-6 py-3 bg-accent-red text-white rounded-lg text-sm font-bold hover:bg-accent-red/90 disabled:opacity-50 transition-colors"
             >
               {submitting ? 'Submitting...' : 'Submit Obituary Information'}

@@ -67,17 +67,9 @@ export function isEncrypted(bytes: Buffer | Uint8Array): boolean {
 }
 
 /**
- * Safely decrypt — if buffer doesn't look encrypted (legacy data), return as-is.
+ * Decrypt encrypted blobs while preserving legacy unencrypted images.
  */
 export function safeDecryptImage(bytes: Buffer | Uint8Array): Buffer {
-  try {
-    if (isEncrypted(bytes)) {
-      return decryptImage(bytes);
-    }
-    // Legacy unencrypted blob — return raw
-    return Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-  } catch {
-    // Decryption failed — return raw (handles edge cases)
-    return Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-  }
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  return isEncrypted(buf) ? decryptImage(buf) : buf;
 }

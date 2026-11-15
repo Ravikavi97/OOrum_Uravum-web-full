@@ -272,7 +272,7 @@ router.post(
       const serialized = serializeArticle(article);
 
       // Invalidate article list cache
-      await invalidateByTags(['articles']);
+      await invalidateByTags(['articles', 'search']);
       revalidateFrontend();
 
       res.status(201).json(serialized);
@@ -386,7 +386,7 @@ router.put(
       const serialized = serializeArticle(article);
 
       // Invalidate caches
-      const cacheTags = ['articles', `article:${id}`];
+      const cacheTags = ['articles', 'search', `article:${id}`];
       if (isPublishing) {
         cacheTags.push('home', `category:${article.categoryId}`);
       }
@@ -428,6 +428,7 @@ router.delete(
       // Invalidate caches
       await invalidateByTags([
         'articles',
+        'search',
         `article:${id}`,
         'home',
         `category:${existing.categoryId}`,

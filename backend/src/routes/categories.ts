@@ -77,7 +77,7 @@ const updateCategorySchema = z.object({
 
 router.get('/', async (_req: AuthenticatedRequest, res: Response) => {
   try {
-    const cacheKey = 'categories:list';
+    const cacheKey = 'categories:list:v2';
 
     const cached = await getCached<unknown>(cacheKey);
     if (cached) {
@@ -87,7 +87,18 @@ router.get('/', async (_req: AuthenticatedRequest, res: Response) => {
 
     const categories = await prisma.category.findMany({
       include: {
-        children: { select: { id: true, name: true, slug: true, description: true, parentId: true, iconUrl: true, iconKey: true } },
+        children: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            path: true,
+            description: true,
+            parentId: true,
+            iconUrl: true,
+            iconKey: true,
+          },
+        },
         parent: { select: { id: true, name: true, slug: true } },
         _count: { select: { articles: true } },
       },
@@ -293,7 +304,7 @@ router.post(
       });
 
       // Invalidate category list cache
-      await invalidateByTags(['categories']);
+      await invalidateByTags(['categories', 'search']);
       revalidateFrontend();
 
       res.status(201).json(category);
@@ -410,7 +421,7 @@ const { name, description, parentId, iconUrl, iconKey, slug: customSlug, path: c
       });
 
       // Invalidate caches
-      await invalidateByTags(['categories', `category:${id}`]);
+      await invalidateByTags(['categories', 'search', `category:${id}`]);
       revalidateFrontend();
 
       res.json(category);
@@ -460,7 +471,7 @@ router.delete(
       await prisma.category.delete({ where: { id } });
 
       // Invalidate caches
-      await invalidateByTags(['categories', `category:${id}`]);
+      await invalidateByTags(['categories', 'search', `category:${id}`]);
       revalidateFrontend();
 
       res.json({ message: 'Category deleted successfully' });

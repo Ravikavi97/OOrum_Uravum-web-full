@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getArticles, getCategories, getObituaries } from "@/services/api";
+import { getArticles, getCategories, getObituaries, getObituaryImageUrl } from "@/services/api";
 import type { Obituary } from "@/services/api";
 import ArticleCard from "@/components/article/ArticleCard";
 import Pagination from "@/components/ui/Pagination";
@@ -151,15 +151,19 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       {/* Standalone obituaries (only for obituary category) */}
       {obituaries.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {obituaries.map((o) => (
-            <Link key={o.id} href={`/obituary/${o.slug}`} className="block rounded-2xl bg-card-bg shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+          {obituaries.map((o) => {
+            const imageUrl = getObituaryImageUrl(o);
+            return (
+              <Link key={o.id} href={`/obituary/${o.slug}`} className="block rounded-2xl bg-card-bg shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
               <div className="aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-gray-300 to-gray-400">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/obituaries/${o.id}/image`}
-                  alt={o.name}
-                  className="w-full h-full object-cover"
-                />
+                {imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageUrl}
+                    alt={o.name}
+                    className="w-full h-full object-cover"
+                  />
+                )}
               </div>
               <div className="p-4">
                 <h3 className="text-base font-bold leading-snug line-clamp-2 min-h-[2.75rem]">{o.name}</h3>
@@ -168,8 +172,9 @@ export default async function CategoryPage({ params, searchParams }: { params: P
                   {new Date(o.publishedAt).toLocaleDateString("ta-IN", { year: "numeric", month: "long", day: "numeric" })}
                 </div>
               </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
 

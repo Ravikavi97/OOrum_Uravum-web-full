@@ -32,20 +32,35 @@ enum CommentStatus {
 // ─── FrontendUser (public site users) ────────────────────────────────────────
 
 model FrontendUser {
-  id           String    @id @default(cuid()) @db.VarChar(30)
-  name         String    @db.VarChar(255)
-  email        String    @unique @db.VarChar(255)
-  phone        String?   @db.VarChar(20)
-  address      String?   @db.Text
-  passwordHash String    @map("password_hash") @db.VarChar(255)
-  avatarUrl    String?   @map("avatar_url") @db.VarChar(500)
-  active       Boolean   @default(true)
-  failedLogins Int       @default(0) @map("failed_logins")
-  lockedUntil  DateTime? @map("locked_until")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id            String    @id @default(cuid()) @db.VarChar(30)
+  name          String    @db.VarChar(255)
+  email         String    @unique @db.VarChar(255)
+  phone         String?   @db.VarChar(20)
+  address       String?   @db.Text
+  passwordHash  String    @map("password_hash") @db.VarChar(255)
+  avatarUrl     String?   @map("avatar_url") @db.VarChar(500)
+  googleId      String?   @unique @map("google_id") @db.VarChar(255)
+  emailVerified Boolean   @default(true) @map("email_verified")
+  active        Boolean   @default(true)
+  failedLogins  Int       @default(0) @map("failed_logins")
+  lockedUntil   DateTime? @map("locked_until")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@map("frontend_users")
+}
+
+model FrontendEmailVerification {
+  id         String   @id @default(cuid()) @db.VarChar(30)
+  email      String   @unique @db.VarChar(255)
+  codeHash   String   @map("code_hash") @db.Char(64)
+  expiresAt  DateTime @map("expires_at")
+  attempts   Int      @default(0)
+  lastSentAt DateTime @map("last_sent_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("frontend_email_verifications")
 }
 
 // ─── Admin Notification ──────────────────────────────────────────────────────
@@ -113,6 +128,7 @@ model Article {
   @@index([status, publishedAt(sort: Desc)])
   @@index([authorId])
   @@index([categoryId])
+  @@fulltext([title, excerpt, content], map: "articles_fulltext_idx")
   @@map("articles")
 }
 
@@ -230,6 +246,8 @@ model Obituary {
   content                 String   @db.Text
   sourceUrl               String?  @unique @map("source_url") @db.VarChar(2048)
   imageData               Bytes?   @map("image_data") @db.LongBlob
+  imageMimeType           String?  @map("image_mime_type") @db.VarChar(100)
+  imageUrl                String?  @map("image_url") @db.VarChar(2048)
   status                  String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, REJECTED
   submitterName           String?  @map("submitter_name") @db.VarChar(255)
   submitterEmail          String?  @map("submitter_email") @db.VarChar(255)

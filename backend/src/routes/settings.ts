@@ -10,11 +10,13 @@ const router = Router();
 const SETTINGS_CACHE_KEY = 'settings:all';
 const PUBLIC_SETTINGS_CACHE_KEY = 'settings:public';
 
-// Keys that are safe to expose publicly (no analytics IDs, secrets, etc.)
+// Google Analytics measurement IDs are public identifiers, not credentials.
+// Never add authentication keys or other secrets to this public allowlist.
 const PUBLIC_SETTING_KEYS = [
   'siteTitle',
   'siteDescription',
   'siteTagline',
+  'analyticsId',
   'socialLinks',
   'homeLayout',
   'heroConfig',
@@ -37,6 +39,7 @@ const updateSettingsSchema = z.object({
   // Generic key/value for custom settings like homeLayout
   key: z.string().optional(),
   value: z.string().optional(),
+  settings: z.record(z.string(), z.string()).optional(),
 });
 
 // ─── GET /public — Get non-sensitive settings (no auth) ──────────────────────
@@ -108,41 +111,45 @@ router.put(
     }
 
     try {
-      const entries: Array<{ key: string; value: string }> = [];
+      const entries = new Map<string, string>();
 
       if (parsed.data.siteTitle !== undefined) {
-        entries.push({ key: 'siteTitle', value: parsed.data.siteTitle });
+        entries.set('siteTitle', parsed.data.siteTitle);
       }
       if (parsed.data.siteDescription !== undefined) {
-        entries.push({ key: 'siteDescription', value: parsed.data.siteDescription });
+        entries.set('siteDescription', parsed.data.siteDescription);
       }
       if (parsed.data.siteTagline !== undefined) {
-        entries.push({ key: 'siteTagline', value: parsed.data.siteTagline });
+        entries.set('siteTagline', parsed.data.siteTagline);
       }
       if (parsed.data.socialLinks !== undefined) {
-        entries.push({ key: 'socialLinks', value: JSON.stringify(parsed.data.socialLinks) });
+        entries.set('socialLinks', JSON.stringify(parsed.data.socialLinks));
       }
       if (parsed.data.analyticsId !== undefined) {
-        entries.push({ key: 'analyticsId', value: parsed.data.analyticsId });
+        entries.set('analyticsId', parsed.data.analyticsId);
       }
 
       // Handle generic key/value pairs (e.g., homeLayout)
       if (parsed.data.key && parsed.data.value !== undefined) {
-        entries.push({ key: parsed.data.key, value: parsed.data.value });
+        entries.set(parsed.data.key, parsed.data.value);
+      }
+      for (const [key, value] of Object.entries(parsed.data.settings ?? {})) {
+        entries.set(key, value);
       }
 
-      // Upsert each setting
-      for (const { key, value } of entries) {
-        await prisma.siteSetting.upsert({
-          where: { key },
-          update: { value },
-          create: { key, value },
-        });
+      if (entries.size > 0) {
+        await prisma.$transaction(
+          [...entries].map(([key, value]) => prisma.siteSetting.upsert({
+            where: { key },
+            update: { value },
+            create: { key, value },
+          })),
+        );
       }
 
       // Invalidate settings cache
       await invalidateByPattern('settings:*');
-      revalidateFrontend();
+      await revalidateFrontend();
 
       // Return updated settings
       const rows = await prisma.siteSetting.findMany();

@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  getArticles, getBreakingArticles, getCategories, getSiteSettings,
-  getObituaries, getHomeLayout, getHeroConfig, getVideoPosts, getVideoHeroConfig,
+  getArticles, getCategories, getSiteSettings,
+  getObituaries, getObituaryImageUrl, getHomeLayout, getHeroConfig, getVideoPosts, getVideoHeroConfig,
   getAdvertisements, getCategoriesWithLatest,
 } from '@/services/api';
 import type {
@@ -22,6 +22,7 @@ import type { HubPost } from '@/components/ui/FeaturedHub';
 import SponsoredSidebar from '@/components/ui/SponsoredSidebar';
 import CategoryCards from '@/components/ui/CategoryCards';
 import type { CategoryCardItem } from '@/components/ui/CategoryCards';
+import ObituaryPhoto from '@/components/ui/ObituaryPhoto';
 
 export const dynamic = 'force-dynamic';
 const PAGE_SIZE = 12;
@@ -157,8 +158,7 @@ function ObitCard({ item }: { item: ObitItem }) {
         {item.type === 'article'
           ? <ArticleImage featuredImage={item.image || null} title={item.title} categoryName="Obituary"
               className="group-hover:scale-105 transition-transform duration-300" />
-          // eslint-disable-next-line @next/next/no-img-element
-          : <img src={item.image} alt={item.title} loading="lazy"
+          : <ObituaryPhoto src={item.image || null} alt={item.title}
               className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />
         }
       </div>
@@ -193,11 +193,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const empty     = { data: [] as Article[], total: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 };
   const emptyObits = { data: [] as Obituary[], total: 0, page: 1, pageSize: 10, totalPages: 0 };
 
-  const [latestRes, heroRes, _brk, cats, obitsRes, layoutSections, heroConfig, videoPosts, videoHeroConfig, sidebarAds, categoryLatest] =
+  const [latestRes, heroRes, cats, obitsRes, layoutSections, heroConfig, videoPosts, videoHeroConfig, sidebarAds, categoryLatest] =
     await Promise.all([
       safe(() => getArticles({ page, pageSize: PAGE_SIZE, status: 'PUBLISHED' }), empty),
       safe(() => getArticles({ page: 1, pageSize: 24, status: 'PUBLISHED' }), empty),
-      safe(() => getBreakingArticles(), empty),
       safe(() => getCategories(), [] as Category[]),
       safe(() => getObituaries({ pageSize: 8 }), emptyObits),
       safe(() => getHomeLayout(), [] as HomeLayoutSection[]),
@@ -212,6 +211,17 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     if (!layoutSections.length) return true;
     const s = layoutSections.find((x) => x.id === id);
     return s ? s.visible : true;
+  };
+  const orderedIds = (ids: string[]) => {
+    const missingOrder = layoutSections.length + ids.length;
+    return ids
+      .map((id, index) => ({
+        id,
+        index,
+        order: layoutSections.find((section) => section.id === id)?.order ?? missingOrder + index,
+      }))
+      .sort((a, b) => a.order - b.order || a.index - b.index)
+      .map(({ id }) => id);
   };
 
   const latestArticles = latestRes.data;
@@ -245,8 +255,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     })),
     ...obituaries.map((o) => ({
       id: o.id, type: 'obituary' as const,
-      title: o.name, excerpt: o.content, image:
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/obituaries/${o.id}/image`,
+      title: o.name, excerpt: o.content, image: getObituaryImageUrl(o) || '',
       date: o.publishedAt, link: `/obituary/${o.slug}`,
     })),
   ].slice(0, 8);
@@ -307,31 +316,30 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             title: latestObit.name,
             href: `/obituary/${latestObit.slug}`,
             excerpt: latestObit.content,
-            image: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/obituaries/${latestObit.id}/image`,
+            image: getObituaryImageUrl(latestObit) || '',
             publishedAt: latestObit.publishedAt,
           }
         : null,
     });
   }
 
-  /* ordered sections */
-  const mainIds = ['videoHero', 'ticker', 'hero', 'topicCards', 'obituary', 'latestNews'];
-  const orderedSections = (() => {
-    if (layoutSections.length) {
-      const cfg = layoutSections.filter((s) => mainIds.includes(s.id)).sort((a, b) => a.order - b.order);
-      const cfgIds = new Set(cfg.map((s) => s.id));
-      const missing = mainIds.filter((id) => !cfgIds.has(id)).map((id, i) => ({ id, label: id, visible: true, order: cfg.length + i }));
-      return [...cfg, ...missing];
-    }
-    return mainIds.map((id, i) => ({ id, label: id, visible: true, order: i }));
-  })();
-
+  const upperContentIds = orderedIds(['videoHero', 'hero', 'topicCards']);
+  const feedSectionIds = orderedIds(['obituary', 'latestNews']);
+  const sidebarIds = orderedIds(['adSidebar', 'archiveSidebar']);
+  const showWelcome = isVisible('welcome');
+  const showFeaturedHub = isVisible('featuredHub');
+  const showSponsoredSidebar = isVisible('sponsoredSidebar');
+  const showCategoryCards = isVisible('categoryCards');
   const showAdSidebar      = isVisible('adSidebar');
   const showArchiveSidebar = isVisible('archiveSidebar');
   const mainColSpan = showAdSidebar && showArchiveSidebar ? 'lg:col-span-3'
     : showAdSidebar || showArchiveSidebar ? 'lg:col-span-4' : 'lg:col-span-5';
-
-  const aboveGrid = ['hero', 'topicCards', 'videoHero'];
+  const leftSidebarId = showAdSidebar && showArchiveSidebar
+    ? sidebarIds[0]
+    : showAdSidebar ? 'adSidebar' : null;
+  const rightSidebarId = showAdSidebar && showArchiveSidebar
+    ? sidebarIds[1]
+    : showArchiveSidebar ? 'archiveSidebar' : null;
 
   /* section renderer */
   const renderSection = (id: string) => {
@@ -389,79 +397,73 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     }
   };
 
-  const tickerSection    = orderedSections.find((s) => s.id === 'ticker');
-  const videoHeroSection = orderedSections.find((s) => s.id === 'videoHero');
-  const contentSections  = orderedSections.filter((s) => s.id !== 'ticker' && s.id !== 'videoHero');
-
   return (
     <>
       {/* Ticker — full width above everything */}
-      {tickerSection && isVisible('ticker') && <Ticker articles={heroArticles.slice(0, 20)} />}
+      {isVisible('ticker') && <Ticker articles={heroArticles.slice(0, 20)} />}
 
       <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-        <Breadcrumb items={[
-          { label: 'முகப்பு', href: '/' },
-          { label: 'Overview' },
-          { label: 'Welcome to Oorum Uravum (ஊரும் உறவும்)' },
-        ]} />
+        {showWelcome && (
+          <>
+            <Breadcrumb items={[
+              { label: 'முகப்பு', href: '/' },
+              { label: 'Overview' },
+              { label: 'Welcome to Oorum Uravum (ஊரும் உறவும்)' },
+            ]} />
 
-        <header className="mb-6">
-          <div className="mb-2 flex items-start gap-2">
-            <span className="w-1 h-6 shrink-0 bg-accent-red rounded-full" />
-            <h1 className="text-xl font-bold sm:text-2xl">Welcome to Oorum Uravum (ஊரும் உறவும்)</h1>
-          </div>
-          <p className="text-sm text-foreground/60">
-            A Portal for Tamil Cultural Heritage, Historical Archives, Obituaries, and Community Documentation
-          </p>
-        </header>
+            <header className="mb-6">
+              <div className="mb-2 flex items-start gap-2">
+                <span className="w-1 h-6 shrink-0 bg-accent-red rounded-full" />
+                <h1 className="text-xl font-bold sm:text-2xl">Welcome to Oorum Uravum (ஊரும் உறவும்)</h1>
+              </div>
+              <p className="text-sm text-foreground/60">
+                A Portal for Tamil Cultural Heritage, Historical Archives, Obituaries, and Community Documentation
+              </p>
+            </header>
 
-        {/* Divider between welcome header and the next section */}
-        <Divider className="mb-6" />
-
-        {/* Featured Hub + sponsored sidebar */}
-        <section aria-label="Featured Hub" className="mb-8">
-          <div className="grid items-start gap-6 lg:grid-cols-3 lg:gap-10">
-            <div className="lg:col-span-2">
-              <FeaturedHub posts={hubPosts} />
-            </div>
-            <div className="lg:col-span-1">
-              <SponsoredSidebar ads={sidebarAds} />
-            </div>
-          </div>
-
-          <CategoryCards items={categoryCards} />
-        </section>
-
-        {videoHeroSection && isVisible('videoHero') && videoPosts.length > 0 && (
-          <div className="mb-6">
-            <VideoHeroSection videos={videoPosts}
-              videoCategorySlugs={videoHeroConfig.categorySlugs}
-              videoInfoRowTitle={videoHeroConfig.infoRowTitle} />
-          </div>
+            <Divider className="mb-6" />
+          </>
         )}
 
-        {/* Above-grid sections */}
-        {contentSections.filter((s) => aboveGrid.includes(s.id)).map((s) => renderSection(s.id))}
+        {(showFeaturedHub || showSponsoredSidebar || showCategoryCards) && (
+          <section aria-label="Featured homepage content" className="mb-8">
+            {(showFeaturedHub || showSponsoredSidebar) && (
+              <div className="grid items-start gap-6 lg:grid-cols-3 lg:gap-10">
+                {showFeaturedHub && (
+                  <div className={showSponsoredSidebar ? 'lg:col-span-2' : 'lg:col-span-3'}>
+                    <FeaturedHub posts={hubPosts} />
+                  </div>
+                )}
+                {showSponsoredSidebar && (
+                  <div className={showFeaturedHub ? 'lg:col-span-1' : 'lg:col-span-3'}>
+                    <SponsoredSidebar ads={sidebarAds} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showCategoryCards && <CategoryCards items={categoryCards} />}
+          </section>
+        )}
+
+        {upperContentIds.filter(isVisible).map((id) => renderSection(id))}
 
         {/* Divider */}
         {latestArticles.length > 0 && <Divider className="my-8" />}
 
         {/* Sidebar grid */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {showAdSidebar && (
+          {leftSidebarId && (
             <aside className="hidden lg:col-span-1 lg:flex lg:flex-col order-2 lg:order-1 gap-4">
-              <AdSidebar />
+              {leftSidebarId === 'adSidebar' ? <AdSidebar /> : <ArchiveSidebar />}
             </aside>
           )}
           <div className={`order-1 lg:order-2 ${mainColSpan} space-y-6`}>
-            {/* Obituary section (inside grid, above latest) */}
-            {renderSection('obituary')}
-            {/* Latest news */}
-            {renderSection('latestNews')}
+            {feedSectionIds.map((id) => renderSection(id))}
           </div>
-          {showArchiveSidebar && (
+          {rightSidebarId && (
             <aside className="hidden lg:col-span-1 lg:flex lg:flex-col order-3 gap-4">
-              <ArchiveSidebar />
+              {rightSidebarId === 'adSidebar' ? <AdSidebar /> : <ArchiveSidebar />}
             </aside>
           )}
         </div>

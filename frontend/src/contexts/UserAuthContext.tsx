@@ -2,8 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-
 export interface FrontendUser {
   id: string;
   name: string;
@@ -17,8 +15,24 @@ interface UserAuthContextType {
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { name: string; email: string; phone?: string; address?: string; password: string; confirmPassword: string }) => Promise<void>;
+  requestRegistrationCode: (data: RegistrationData) => Promise<void>;
+  verifyRegistrationCode: (data: RegistrationData & { verificationCode: string }) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
+}
+
+type RegistrationData = {
+  name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  password: string;
+  confirmPassword: string;
+};
+
+async function responseError(response: Response, fallback: string): Promise<Error> {
+  const body = await response.json().catch(() => ({ error: { message: fallback } }));
+  return new Error(body.error?.message || fallback);
 }
 
 const UserAuthContext = createContext<UserAuthContextType | undefined>(undefined);
@@ -51,14 +65,13 @@ export function UserAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await fetch(`${API_URL}/public-auth/login`, {
+    const res = await fetch('/api/public-auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: { message: 'Login failed' } }));
-      throw new Error(body.error?.message || 'Login failed');
+      throw await responseError(res, 'Login failed');
     }
     const data = await res.json();
     setToken(data.token);
@@ -67,15 +80,41 @@ export function UserAuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user_data', JSON.stringify(data.user));
   }, []);
 
-  const register = useCallback(async (data: { name: string; email: string; phone?: string; address?: string; password: string; confirmPassword: string }) => {
-    const res = await fetch(`${API_URL}/public-auth/register`, {
+  const requestRegistrationCode = useCallback(async (data: RegistrationData) => {
+    const res = await fetch('/api/public-auth/register-request-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      const body = await res.json().catch(() => ({ error: { message: 'Registration failed' } }));
-      throw new Error(body.error?.message || 'Registration failed');
+      throw await responseError(res, 'Could not send verification code');
+    }
+  }, []);
+
+  const verifyRegistrationCode = useCallback(async (data: RegistrationData & { verificationCode: string }) => {
+    const res = await fetch('/api/public-auth/register-verify-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      throw await responseError(res, 'Could not verify registration code');
+    }
+    const result = await res.json();
+    setToken(result.token);
+    setUser(result.user);
+    localStorage.setItem('user_token', result.token);
+    localStorage.setItem('user_data', JSON.stringify(result.user));
+  }, []);
+
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    const res = await fetch('/api/public-auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential }),
+    });
+    if (!res.ok) {
+      throw await responseError(res, 'Google sign-in failed');
     }
     const result = await res.json();
     setToken(result.token);
@@ -85,7 +124,16 @@ export function UserAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <UserAuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <UserAuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      login,
+      requestRegistrationCode,
+      verifyRegistrationCode,
+      loginWithGoogle,
+      logout,
+    }}>
       {children}
     </UserAuthContext.Provider>
   );

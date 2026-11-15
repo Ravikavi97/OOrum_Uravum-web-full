@@ -252,7 +252,7 @@ describe('POST /api/tags', () => {
       .set('x-test-user', editorUser)
       .send(validBody);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['tags']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['tags', 'search']);
   });
 });
 
@@ -376,7 +376,7 @@ describe('PUT /api/tags/:id', () => {
       .set('x-test-user', editorUser)
       .send(validBody);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['tags', 'tag:tag-1']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['tags', 'search', 'tag:tag-1']);
   });
 });
 
@@ -454,6 +454,6 @@ describe('DELETE /api/tags/:id', () => {
       .set('Authorization', 'Bearer test-token')
       .set('x-test-user', editorUser);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['tags', 'tag:tag-1']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['tags', 'search', 'tag:tag-1']);
   });
 });

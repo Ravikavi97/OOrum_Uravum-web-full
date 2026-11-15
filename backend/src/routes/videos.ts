@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthenticatedRequest } from '../lib/auth';
+import { invalidateByTags } from '../lib/cache';
 import { revalidateFrontend } from '../lib/revalidate';
 import { generateUniqueSlug } from '../lib/slug';
 
@@ -58,6 +59,7 @@ router.post('/categories', requireAuth, requireRole('ADMIN', 'EDITOR'), async (r
   }
   try {
     const cat = await prisma.videoCat.create({ data: parsed.data });
+    await invalidateByTags(['search']);
     res.status(201).json(cat);
   } catch (err) {
     console.error('[videos] POST /categories error:', err);
@@ -69,6 +71,7 @@ router.post('/categories', requireAuth, requireRole('ADMIN', 'EDITOR'), async (r
 router.delete('/categories/:id', requireAuth, requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     await prisma.videoCat.delete({ where: { id: req.params.id as string } });
+    await invalidateByTags(['search']);
     res.json({ message: 'Video category deleted' });
   } catch (err) {
     res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Failed to delete video category' } });
@@ -134,6 +137,7 @@ router.post('/', requireAuth, requireRole('ADMIN', 'EDITOR'), async (req: Authen
       },
       include: { category: true },
     });
+    await invalidateByTags(['search']);
     revalidateFrontend();
     res.status(201).json(video);
   } catch (err) {
@@ -158,6 +162,7 @@ router.put('/:id', requireAuth, requireRole('ADMIN', 'EDITOR'), async (req: Auth
     }
     if (data.categoryId === '') data.categoryId = null;
     const video = await prisma.videoPost.update({ where: { id: req.params.id as string }, data, include: { category: true } });
+    await invalidateByTags(['search']);
     revalidateFrontend();
     res.json(video);
   } catch (err) {
@@ -169,6 +174,7 @@ router.put('/:id', requireAuth, requireRole('ADMIN', 'EDITOR'), async (req: Auth
 router.delete('/:id', requireAuth, requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     await prisma.videoPost.delete({ where: { id: req.params.id as string } });
+    await invalidateByTags(['search']);
     revalidateFrontend();
     res.json({ message: 'Video deleted' });
   } catch (err) {

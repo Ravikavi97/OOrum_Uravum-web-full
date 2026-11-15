@@ -331,7 +331,7 @@ describe('POST /api/articles', () => {
       .set('x-test-user', authorUser)
       .send(validBody);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['articles']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['articles', 'search']);
   });
 
   it('returns 400 for invalid category', async () => {

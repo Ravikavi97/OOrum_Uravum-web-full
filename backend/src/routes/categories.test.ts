@@ -43,6 +43,7 @@ vi.mock('../lib/cache', () => ({
 // Mock slug generator
 vi.mock('../lib/slug', () => ({
   generateUniqueSlug: vi.fn().mockResolvedValue('test-category-slug'),
+  isValidSlug: vi.fn().mockReturnValue(true),
 }));
 
 // Mock auth middleware
@@ -197,8 +198,8 @@ describe('GET /api/categories', () => {
     const app = createApp();
     await request(app).get('/api/categories');
 
-    expect(mockSetCached).toHaveBeenCalledWith('categories:list', [sampleCategory], 600);
-    expect(mockAddTagsToKey).toHaveBeenCalledWith('categories:list', ['categories']);
+    expect(mockSetCached).toHaveBeenCalledWith('categories:list:v2', [sampleCategory], 600);
+    expect(mockAddTagsToKey).toHaveBeenCalledWith('categories:list:v2', ['categories']);
   });
 
   it('includes article count in response', async () => {
@@ -787,7 +788,7 @@ describe('category icon fields', () => {
       expect.objectContaining({
         include: expect.objectContaining({
           children: {
-            select: expect.objectContaining({ iconUrl: true, iconKey: true }),
+            select: expect.objectContaining({ path: true, iconUrl: true, iconKey: true }),
           },
         }),
       }),

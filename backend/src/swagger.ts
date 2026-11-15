@@ -1,6 +1,35 @@
 import { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 
+const obituaryDetailProperties = {
+  firstName: { type: 'string' },
+  middleName: { type: 'string' },
+  surname: { type: 'string' },
+  otherNames: { type: 'string' },
+  dateOfBirth: { type: 'string', format: 'date', nullable: true },
+  dateOfDeath: { type: 'string', format: 'date', nullable: true },
+  placeOfBirth: { type: 'string' },
+  lastResidentialAddress: { type: 'string' },
+  fatherName: { type: 'string' },
+  motherName: { type: 'string' },
+  maritalStatus: { type: 'string' },
+  spouseName: { type: 'string' },
+  brothersNames: { type: 'string' },
+  sistersNames: { type: 'string' },
+  fatherInLawName: { type: 'string' },
+  motherInLawName: { type: 'string' },
+  sonsNames: { type: 'string' },
+  daughtersNames: { type: 'string' },
+  sonsInLawNames: { type: 'string' },
+  daughtersInLawNames: { type: 'string' },
+  grandchildrenNames: { type: 'string' },
+  occupations: { type: 'string' },
+  hobbiesInterests: { type: 'string' },
+  communityActivities: { type: 'string' },
+  otherDetails: { type: 'string' },
+  lifeStory: { type: 'string' },
+};
+
 const spec = {
   openapi: '3.0.3',
   info: {
@@ -297,14 +326,20 @@ const spec = {
     },
     // ── Obituaries ──
     '/obituaries': {
-      get: { tags: ['Obituaries'], summary: 'List obituaries', parameters: [{ name: 'page', in: 'query', schema: { type: 'integer' } }, { name: 'pageSize', in: 'query', schema: { type: 'integer' } }], responses: { '200': { description: 'Paginated obituaries' } } },
-      post: { tags: ['Obituaries'], summary: 'Create obituary', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['name', 'content'], properties: { name: { type: 'string' }, content: { type: 'string' }, image: { type: 'string', format: 'binary' }, publishedAt: { type: 'string', format: 'date-time' } } } } } }, responses: { '201': { description: 'Created' } } },
+      get: { tags: ['Obituaries'], summary: 'List approved obituaries; Admin/Editor may filter all statuses', parameters: [{ name: 'page', in: 'query', schema: { type: 'integer' } }, { name: 'pageSize', in: 'query', schema: { type: 'integer' } }, { name: 'status', in: 'query', schema: { type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] } }], responses: { '200': { description: 'Paginated obituaries' } } },
+      post: { tags: ['Obituaries'], summary: 'Create obituary', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['name', 'content'], properties: { name: { type: 'string' }, content: { type: 'string', description: 'Publication content written by the publisher' }, ...obituaryDetailProperties, image: { type: 'string', format: 'binary' }, imageUrl: { type: 'string', format: 'uri' }, publishedAt: { type: 'string', format: 'date-time' } } } } } }, responses: { '201': { description: 'Created; Author-created posts remain pending review' } } },
+    },
+    '/obituaries/submit': {
+      post: { tags: ['Obituaries'], summary: 'Submit an obituary for review', requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['firstName', 'dateOfDeath'], properties: { ...obituaryDetailProperties, photo: { type: 'string', format: 'binary' }, submitterName: { type: 'string' }, submitterEmail: { type: 'string', format: 'email' } } } } } }, responses: { '201': { description: 'Submitted and pending admin review' }, '400': { description: 'Validation or upload error' } } },
+    },
+    '/obituaries/slug/{slug}': {
+      get: { tags: ['Obituaries'], summary: 'Get an approved obituary by slug', parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Obituary details' }, '404': { description: 'Not found' } } },
     },
     '/obituaries/{id}/image': {
-      get: { tags: ['Obituaries'], summary: 'Get obituary image', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Image bytes', content: { 'image/jpeg': {} } }, '404': { description: 'Not found' } } },
+      get: { tags: ['Obituaries'], summary: 'Get obituary image', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Image bytes', content: { 'image/jpeg': {}, 'image/png': {}, 'image/webp': {} } }, '404': { description: 'Not found' } } },
     },
     '/obituaries/{id}': {
-      put: { tags: ['Obituaries'], summary: 'Update obituary', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Updated' } } },
+      put: { tags: ['Obituaries'], summary: 'Edit obituary; Admin/Editor only may change review status', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, content: { type: 'string', description: 'Publication content written by the publisher' }, ...obituaryDetailProperties, status: { type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] }, imageUrl: { type: 'string', format: 'uri' }, publishedAt: { type: 'string', format: 'date-time' } } } }, 'multipart/form-data': { schema: { type: 'object', properties: { name: { type: 'string' }, content: { type: 'string', description: 'Publication content written by the publisher' }, ...obituaryDetailProperties, status: { type: 'string', enum: ['PENDING', 'APPROVED', 'REJECTED'] }, imageUrl: { type: 'string', format: 'uri' }, publishedAt: { type: 'string', format: 'date-time' }, image: { type: 'string', format: 'binary' } } } } } }, responses: { '200': { description: 'Updated' }, '403': { description: 'Insufficient permissions to review' } } },
       delete: { tags: ['Obituaries'], summary: 'Delete obituary', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Deleted' } } },
     },
     // ── Advertisements ──
@@ -325,7 +360,7 @@ const spec = {
     },
     // ── Search ──
     '/search': {
-      get: { tags: ['Search'], summary: 'Search articles', parameters: [{ name: 'q', in: 'query', required: true, schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'integer' } }], responses: { '200': { description: 'Search results' } } },
+      get: { tags: ['Search'], summary: 'Search public articles, obituaries, and videos', parameters: [{ name: 'q', in: 'query', required: true, schema: { type: 'string', maxLength: 120 } }, { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1 } }, { name: 'pageSize', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 50 } }], responses: { '200': { description: 'Paginated public content results' }, '400': { description: 'Invalid search query or page' } } },
     },
     // ── Authors ──
     '/authors': {
@@ -347,7 +382,7 @@ const spec = {
     { name: 'Obituaries', description: 'Obituary management' },
     { name: 'Advertisements', description: 'Advertisement management' },
     { name: 'Visitors', description: 'Visitor tracking' },
-    { name: 'Search', description: 'Article search' },
+    { name: 'Search', description: 'Public article, obituary, and video search' },
     { name: 'Authors', description: 'Author profiles' },
   ],
 };

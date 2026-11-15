@@ -6,8 +6,10 @@ import PopularArticles from "@/components/ui/PopularArticles";
 import ThemeProvider from "@/components/ui/ThemeProvider";
 import ScrollToTop from "@/components/ui/ScrollToTop";
 import { UserAuthProvider } from "@/contexts/UserAuthContext";
-import { getCategories } from "@/services/api";
-import type { Category } from "@/services/api";
+import { SiteSettingsPreviewProvider } from "@/contexts/SiteSettingsPreviewContext";
+import { getCategories, getSiteSettings, parseThemeColors } from "@/services/api";
+import type { Category, SiteSettings } from "@/services/api";
+import GoogleAnalytics from "@/components/ui/GoogleAnalytics";
 import "./globals.css";
 
 const notoSansTamil = Noto_Sans_Tamil({
@@ -39,34 +41,58 @@ function resolveMetadataBase(): URL {
   }
 }
 
-export const metadata: Metadata = {
-  metadataBase: resolveMetadataBase(),
-  title: "OORUM URAVUM – ஒன்று பட்டால் உண்டு வாழ்வு",
-  description: "தமிழ் செய்திகள் — செய்திகள், உடல் நலம், தொழில்நுட்பம், படைப்பாக்கம்",
-  // No `icons` field on purpose. The app-icon file conventions in this directory
-  // — `favicon.ico`, `icon.svg` and `apple-icon.png` — are injected by Next.js
-  // and already cover the tab, the maskable/SVG-capable browsers and iOS. Listing
-  // them again here emitted five duplicate <link rel="icon"> tags, and the
-  // `sizes: "192x192"` claim was wrong for the wordmark-shaped `logo.png`.
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const defaults: Metadata = {
+    metadataBase: resolveMetadataBase(),
+    title: "OORUM URAVUM – ஒன்று பட்டால் உண்டு வாழ்வு",
+    description: "தமிழ் செய்திகள் — செய்திகள், உடல் நலம், தொழில்நுட்பம், படைப்பாக்கம்",
+  };
+  try {
+    const settings = await getSiteSettings();
+    return {
+      ...defaults,
+      title: settings.siteTitle || defaults.title,
+      description: settings.siteDescription || defaults.description,
+    };
+  } catch (error) {
+    console.error('[layout] Failed to load site metadata settings:', error);
+    return defaults;
+  }
+}
 
-// Next supplies a default viewport meta, but stating it explicitly documents the
-// intent and adds viewport-fit coverage for notched phones. No maximum-scale or
-// user-scalable lock, so pinch-zoom stays available.
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
-  themeColor: "#0d1b0f",
-};
+export async function generateViewport(): Promise<Viewport> {
+  let themeColor = '#285430';
+  try {
+    const settings = await getSiteSettings();
+    themeColor = parseThemeColors(settings.themeColors)?.primaryDark ?? themeColor;
+  } catch (error) {
+    console.error('[layout] Failed to load viewport theme color:', error);
+  }
+
+  return {
+    width: "device-width",
+    initialScale: 1,
+    viewportFit: "cover",
+    themeColor,
+  };
+}
 
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  let initialCategories: Category[] = [];
-  try { initialCategories = await getCategories(); } catch { /* fallback to empty */ }
+  const [initialCategories, settings] = await Promise.all([
+    getCategories().catch((error: unknown) => {
+      console.error('[layout] Failed to load header categories:', error);
+      return [] as Category[];
+    }),
+    getSiteSettings().catch((error: unknown): SiteSettings => {
+      console.error('[layout] Failed to load site settings:', error);
+      return { analyticsId: '' };
+    }),
+  ]);
+  const initialThemeColors = parseThemeColors(settings.themeColors);
 
   return (
     <html
@@ -76,13 +102,16 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <UserAuthProvider>
-        <ThemeProvider>
-          <Header initialCategories={initialCategories} />
-          <main className="flex-1">{children}</main>
-          <PopularArticles />
-          <Footer />
-          <ScrollToTop />
-        </ThemeProvider>
+          <SiteSettingsPreviewProvider>
+            <ThemeProvider initialColors={initialThemeColors}>
+              <Header initialCategories={initialCategories} />
+              <main className="flex-1">{children}</main>
+              <PopularArticles />
+              <Footer />
+              <GoogleAnalytics initialMeasurementId={settings.analyticsId} />
+              <ScrollToTop />
+            </ThemeProvider>
+          </SiteSettingsPreviewProvider>
         </UserAuthProvider>
       </body>
     </html>

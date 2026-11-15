@@ -3,8 +3,16 @@
 import Link from 'next/link';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCategories, getSiteSettings, getLogo, DEFAULT_LOGO_SRC } from '@/services/api';
+import {
+  getCategories,
+  getSiteSettings,
+  getLogo,
+  DEFAULT_LOGO_SRC,
+  resolveAssetUrl,
+  resolveCategoryPath,
+} from '@/services/api';
 import type { Category } from '@/services/api';
+import { useSiteSettingsPreview } from '@/contexts/SiteSettingsPreviewContext';
 import { useUserAuth } from '@/contexts/UserAuthContext';
 import AuthModal from '@/components/ui/AuthModal';
 import { CategoryIcon } from '@/components/ui/CategoryIcon';
@@ -139,7 +147,7 @@ function DesktopNavItem({ cat }: { cat: Category }) {
 
   if (!hasChildren) {
     return (
-      <Link href={`/category/${cat.slug}`}
+      <Link href={resolveCategoryPath(cat)}
         className="flex min-w-0 grow basis-auto items-center justify-center gap-1.5 px-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/10 transition-colors">
         {icon}
         <span className="truncate">{cat.name}</span>
@@ -150,7 +158,7 @@ function DesktopNavItem({ cat }: { cat: Category }) {
   return (
     <div className="relative flex min-w-0 grow basis-auto"
       onMouseEnter={enter} onMouseLeave={leave} onFocus={enter} onBlur={leave}>
-      <Link href={`/category/${cat.slug}`}
+      <Link href={resolveCategoryPath(cat)}
         className="flex min-w-0 grow basis-auto items-center justify-center gap-1.5 px-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/10 transition-colors">
         {icon}
         <span className="truncate">{cat.name}</span>
@@ -172,7 +180,7 @@ function DesktopNavItem({ cat }: { cat: Category }) {
         <div id={`desktop-submenu-${cat.slug}`}
           className="absolute left-0 top-full z-50 min-w-[200px] rounded-lg bg-white py-1.5 shadow-xl ring-1 ring-black/8 animate-dropdown">
           {children.map((child) => (
-            <Link key={child.slug} href={`/category/${child.slug}`} onClick={close}
+            <Link key={child.slug} href={resolveCategoryPath(child)} onClick={close}
               className="flex items-center gap-2 px-4 py-2 text-[13px] text-gray-700 hover:bg-accent-red/8 hover:text-accent-red transition-colors font-medium">
               <CategoryIcon iconUrl={child.iconUrl} iconKey={child.iconKey} className="h-3.5 w-3.5 shrink-0 text-gray-400" />
               <span className="truncate">{child.name}</span>
@@ -191,7 +199,7 @@ function MobileNavItem({ cat, onClose }: { cat: Category; onClose: () => void })
   return (
     <div className="border-b border-white/8">
       <div className="flex items-center">
-        <Link href={`/category/${cat.slug}`} onClick={onClose}
+        <Link href={resolveCategoryPath(cat)} onClick={onClose}
           className="flex flex-1 items-center gap-2 px-5 py-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/8">
           <CategoryIcon iconUrl={cat.iconUrl} iconKey={cat.iconKey} className="h-4 w-4" mono />
           {cat.name}
@@ -210,8 +218,8 @@ function MobileNavItem({ cat, onClose }: { cat: Category; onClose: () => void })
       </div>
       {hasChildren && expanded && (
         <div id={`mobile-submenu-${cat.slug}`} className="bg-white/5">
-          {cat.children!.map((child) => (
-            <Link key={child.slug} href={`/category/${child.slug}`} onClick={onClose}
+          {(cat.children ?? []).map((child) => (
+            <Link key={child.slug} href={resolveCategoryPath(child)} onClick={onClose}
               className="flex items-center gap-2 px-8 py-2.5 text-[12px] text-white/70 hover:text-white hover:bg-white/10">
               <CategoryIcon iconUrl={child.iconUrl} iconKey={child.iconKey} className="h-3.5 w-3.5" mono />
               {child.name}
@@ -231,21 +239,48 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
   const [userMenuOpen,  setUserMenuOpen]  = useState(false);
   const [query,         setQuery]         = useState('');
   const [dateStr,       setDateStr]       = useState('');
-  const [categories,    setCategories]    = useState<Category[]>(initialCategories);
+  const [fallbackCategories, setFallbackCategories] = useState<Category[]>([]);
+  const [categoriesError, setCategoriesError] = useState(false);
+  const categories = initialCategories.length > 0 ? initialCategories : fallbackCategories;
   const [siteName,      setSiteName]      = useState(DEFAULT_SITE_NAME);
   const [tagline,       setTagline]       = useState(DEFAULT_TAGLINE);
   const [headerLogo,    setHeaderLogo]    = useState(DEFAULT_LOGO_SRC);
   const [headerAds,     setHeaderAds]     = useState<HeaderAd[]>([]);
+  const preview = useSiteSettingsPreview();
   const { user, logout } = useUserAuth();
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const displaySiteName = preview?.siteTitle ?? siteName;
+  const displayTagline = preview?.siteTagline ?? tagline;
+  const displayHeaderLogo = preview
+    ? resolveAssetUrl(preview.headerLogo) ?? DEFAULT_LOGO_SRC
+    : headerLogo;
 
   useEffect(() => {
-    setDateStr(getCurrentDateTamil());
-    // Only re-fetch categories if none were provided server-side
-    if (initialCategories.length === 0) {
-      getCategories().then(setCategories).catch(() => {});
-    }
+    const timer = window.setTimeout(() => setDateStr(getCurrentDateTamil()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (initialCategories.length > 0) return;
+
+    let active = true;
+    getCategories()
+      .then((loadedCategories) => {
+        if (!active) return;
+        setFallbackCategories(loadedCategories);
+        setCategoriesError(false);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        console.error('[header] Failed to load navigation categories:', error);
+        setCategoriesError(true);
+      });
+
+    return () => { active = false; };
+  }, [initialCategories.length]);
+
+  useEffect(() => {
     getSiteSettings().then((s) => {
       if (s.siteTitle)   setSiteName(s.siteTitle);
       if (s.siteTagline) setTagline(s.siteTagline);
@@ -259,7 +294,7 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
       .then((ads: (HeaderAd & { position?: string })[]) =>
         setHeaderAds(ads.filter((a) => a.position === 'header')))
       .catch(() => {});
-  }, [initialCategories.length]);
+  }, []);
 
   // Close user menu on outside click
   useEffect(() => {
@@ -295,34 +330,21 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
       {/* ── Row 2: logo + ad banner ────────────────────────────────────────── */}
       <div className="bg-primary-dark border-b border-white/10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-2 sm:gap-4">
-          {/* Logo — sized as a brand mark beside the site name, not as a wordmark in its
-              own right. The artwork is 384x276 (aspect 1.391), so `h-9` renders it
-              50x36 and `md:h-10` renders it 56x40 — matching the `min-h-[40px]` of the
-              obituary CTA beside it, so both edges align. An earlier `md:h-20` made
-              the logo 80px tall: twice the height of the CTA and of the site-name
-              block it sits next to, which pushed Row 2 to 104px and left the logo
-              dominating a row that is otherwise empty because no header ad is
-              configured.
-
-              The max-width cap is kept at EVERY breakpoint. `md:max-w-none` used to
-              drop it, which defeated the whole point of the cap: a wide logo
-              uploaded through the publisher dashboard then grew to its intrinsic
-              width in a `shrink` row and pushed the header past the viewport.
-              `onError` swaps in the bundled wordmark so a dead upload URL degrades
-              to the default logo instead of a broken-image glyph in every header. */}
+          {/* Keep the larger brand mark bounded at every breakpoint so an uploaded
+              wide logo cannot push the navigation beyond the viewport. */}
           <Link href="/" className="flex min-w-0 items-center gap-3 shrink">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={headerLogo} alt={siteName} width={56} height={40}
+            <img src={displayHeaderLogo} alt={displaySiteName} width={78} height={56}
               onError={(e) => {
                 if (e.currentTarget.src.endsWith(DEFAULT_LOGO_SRC)) return;
                 e.currentTarget.src = DEFAULT_LOGO_SRC;
               }}
-              className="h-9 w-auto max-w-[90px] object-contain md:h-10 md:max-w-[120px] shrink-0" />
+              className="h-11 w-auto max-w-[100px] object-contain md:h-20 md:max-w-[225px] shrink-0" />
             <div className="hidden sm:flex flex-col">
               <span className="text-xl md:text-2xl font-extrabold text-white tracking-wide leading-tight">
-                {siteName}
+                {displaySiteName}
               </span>
-              <span className="text-[11px] text-white/50 tracking-wide">{tagline}</span>
+              <span className="text-[11px] text-white/50 tracking-wide">{displayTagline}</span>
             </div>
           </Link>
 
@@ -341,9 +363,9 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
               <div className="hidden md:flex items-center gap-2">
                 <Link href="/submit-obituary"
                   className="flex items-center gap-1.5 bg-accent-red text-white px-3 py-2 min-h-[40px] rounded-full text-xs font-bold hover:bg-accent-red/85 transition-colors">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/obituary-icon.svg" alt="" aria-hidden="true"
+                    className="h-4 w-4 shrink-0 brightness-0 invert" />
                   பதிவிடு
                 </Link>
                 <div className="relative" ref={userMenuRef}>
@@ -376,9 +398,9 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
               <>
                 <Link href="/submit-obituary"
                   className="flex items-center gap-1.5 bg-accent-red text-white px-2.5 sm:px-3 py-2 min-h-[40px] rounded-full text-[11px] sm:text-xs font-bold whitespace-nowrap hover:bg-accent-red/85 transition-colors shrink-0">
-                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/obituary-icon.svg" alt="" aria-hidden="true"
+                    className="h-4 w-4 shrink-0 brightness-0 invert" />
                   Obituary (அஞ்சலி)
                 </Link>
                 <button onClick={() => setAuthModalOpen(true)}
@@ -470,12 +492,20 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
                 வீடியோ
               </Link>
               {rootCats.map((cat) => <DesktopNavItem key={cat.slug} cat={cat} />)}
+              {categoriesError && categories.length === 0 && (
+                <span role="status" className="self-center px-3 text-xs text-white/60">
+                  பிரிவுகளை ஏற்ற முடியவில்லை
+                </span>
+              )}
             </div>
 
             {/* Right group — obituary + search */}
             <div className="flex items-stretch shrink-0">
               <Link href="/obituary"
-                className="flex shrink-0 items-center whitespace-nowrap px-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/10 transition-colors">
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/10 transition-colors">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/obituary-icon.svg" alt="" aria-hidden="true"
+                  className="h-4 w-4 shrink-0 brightness-0 invert" />
                 Obituary (அஞ்சலி)
               </Link>
               <button
@@ -510,8 +540,16 @@ export default function Header({ initialCategories = [] }: { initialCategories?:
             {rootCats.map((cat) => (
               <MobileNavItem key={cat.slug} cat={cat} onClose={() => setMenuOpen(false)} />
             ))}
+            {categoriesError && categories.length === 0 && (
+              <p role="status" className="px-5 py-3 text-sm text-white/60">
+                பிரிவுகளை ஏற்ற முடியவில்லை
+              </p>
+            )}
             <Link href="/obituary" onClick={() => setMenuOpen(false)}
-              className="block px-5 py-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/8 border-b border-white/8">
+              className="flex items-center gap-2 px-5 py-3 text-[13px] font-semibold text-white/85 hover:text-white hover:bg-white/8 border-b border-white/8">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/obituary-icon.svg" alt="" aria-hidden="true"
+                className="h-4 w-4 shrink-0 brightness-0 invert" />
               Obituary (அஞ்சலி)
             </Link>
           </nav>

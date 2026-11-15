@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminFetch, AdminApiError } from '@/lib/api';
 import ImageUploadField from '@/components/ImageUploadField';
@@ -16,12 +16,19 @@ interface ThemeColors {
 }
 
 const DEFAULT_COLORS: ThemeColors = {
-  primaryDark: '#1a1a2e',
-  accentRed: '#e94560',
-  background: '#f5f5f5',
+  primaryDark: '#285430',
+  accentRed: '#259306',
+  background: '#F5EFE3',
   foreground: '#171717',
   cardBg: '#ffffff',
 };
+
+const DEFAULT_SITE_TITLE = 'OORUM URAVUM';
+const DEFAULT_SITE_TAGLINE = 'ஒன்று பட்டால் உண்டு வாழ்வு';
+const DEFAULT_SITE_DESCRIPTION = 'தமிழ் செய்திகள் — செய்திகள், அறிந்து கொள்வோம், உடல் நலம், தொழில்நுட்பம், படைப்பாக்கம்';
+const ANALYTICS_ID_PATTERN = /^G-[A-Z0-9]{6,20}$/i;
+const PREVIEW_UPDATE_MESSAGE = 'oorum:site-settings-preview:update';
+const PREVIEW_READY_MESSAGE = 'oorum:site-settings-preview:ready';
 
 export default function SettingsPage() {
   const { token, hasRole } = useAuth();
@@ -55,6 +62,101 @@ export default function SettingsPage() {
 
   // Analytics
   const [analyticsId, setAnalyticsId] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewOrigin, setPreviewOrigin] = useState('');
+  const [previewChannel, setPreviewChannel] = useState('');
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const previewFrame = useRef<HTMLIFrameElement>(null);
+
+  const previewSettings = useMemo(() => ({
+    siteTitle: siteTitle || DEFAULT_SITE_TITLE,
+    siteTagline: siteTagline || DEFAULT_SITE_TAGLINE,
+    siteDescription: siteDescription || DEFAULT_SITE_DESCRIPTION,
+    headerLogo,
+    footerLogo,
+    socialLinks: {
+      facebook: socialFacebook,
+      twitter: socialTwitter,
+      instagram: socialInstagram,
+      youtube: socialYoutube,
+      telegram: socialTelegram,
+    },
+    themeColors: colors,
+    analyticsId,
+  }), [
+    siteTitle,
+    siteTagline,
+    siteDescription,
+    headerLogo,
+    footerLogo,
+    socialFacebook,
+    socialTwitter,
+    socialInstagram,
+    socialYoutube,
+    socialTelegram,
+    colors,
+    analyticsId,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+    const channel = window.crypto.randomUUID();
+    setPreviewChannel(channel);
+
+    fetch('/api/preview-config', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Failed to load preview configuration.');
+        return response.json() as Promise<{ frontendUrl?: unknown }>;
+      })
+      .then(({ frontendUrl }) => {
+        if (!active || typeof frontendUrl !== 'string') return;
+        const frontend = new URL(frontendUrl);
+        if (!['http:', 'https:'].includes(frontend.protocol)) {
+          throw new Error('Invalid frontend preview URL.');
+        }
+        frontend.searchParams.set('__sitePreviewChannel', channel);
+        frontend.searchParams.set('__sitePreviewParentOrigin', window.location.origin);
+        setPreviewOrigin(new URL(frontendUrl).origin);
+        setPreviewUrl(frontend.toString());
+      })
+      .catch((previewLoadError: unknown) => {
+        console.error('[settings] Failed to initialize frontend preview:', previewLoadError);
+        if (active) setPreviewError('Frontend preview could not be loaded. Check FRONTEND_PREVIEW_URL.');
+      });
+
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!previewOrigin || !previewChannel) return;
+
+    const handlePreviewMessage = (event: MessageEvent<unknown>) => {
+      if (event.origin !== previewOrigin || event.source !== previewFrame.current?.contentWindow) return;
+      if (typeof event.data !== 'object' || event.data === null) return;
+      const message = event.data as { type?: unknown; channel?: unknown };
+      if (message.type === PREVIEW_READY_MESSAGE && message.channel === previewChannel) {
+        setPreviewReady(true);
+        previewFrame.current?.contentWindow?.postMessage({
+          type: PREVIEW_UPDATE_MESSAGE,
+          channel: previewChannel,
+          settings: previewSettings,
+        }, previewOrigin);
+      }
+    };
+
+    window.addEventListener('message', handlePreviewMessage);
+    return () => window.removeEventListener('message', handlePreviewMessage);
+  }, [previewChannel, previewOrigin, previewSettings]);
+
+  useEffect(() => {
+    if (!previewReady || !previewChannel || !previewOrigin) return;
+    previewFrame.current?.contentWindow?.postMessage({
+      type: PREVIEW_UPDATE_MESSAGE,
+      channel: previewChannel,
+      settings: previewSettings,
+    }, previewOrigin);
+  }, [previewChannel, previewOrigin, previewReady, previewSettings]);
 
   const fetchSettings = useCallback(async () => {
     if (!token) return;
@@ -96,24 +198,47 @@ export default function SettingsPage() {
     return <div><h1 className="text-2xl font-bold mb-4">Settings</h1><p className="text-red-600">Admin access required.</p></div>;
   }
 
-  const saveSetting = async (key: string, value: string) => {
-    await adminFetch('/settings', { token: token!, method: 'PUT', body: JSON.stringify({ key, value }) });
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); setMessage(''); setSaving(true);
+    setError('');
+    setMessage('');
+    if (Object.values(colors).some((color) => !/^#[\da-f]{6}$/i.test(color))) {
+      setError('Theme colors must be valid six-digit hex values.');
+      return;
+    }
+    if (analyticsId && !ANALYTICS_ID_PATTERN.test(analyticsId)) {
+      setError('Google Analytics ID must use the G-XXXXXXXXXX format.');
+      return;
+    }
+    if (!token) {
+      setError('Your session expired. Sign in again to save settings.');
+      return;
+    }
+
+    setSaving(true);
     try {
-      await Promise.all([
-        saveSetting('siteTitle', siteTitle),
-        saveSetting('siteTagline', siteTagline),
-        saveSetting('siteDescription', siteDescription),
-        saveSetting('analyticsId', analyticsId),
-        saveSetting('headerLogo', headerLogo),
-        saveSetting('footerLogo', footerLogo),
-        saveSetting('socialLinks', JSON.stringify({ facebook: socialFacebook, twitter: socialTwitter, instagram: socialInstagram, youtube: socialYoutube, telegram: socialTelegram })),
-        saveSetting('themeColors', JSON.stringify(colors)),
-      ]);
+      await adminFetch('/settings', {
+        token,
+        method: 'PUT',
+        body: JSON.stringify({
+          settings: {
+            siteTitle,
+            siteTagline,
+            siteDescription,
+            analyticsId,
+            headerLogo,
+            footerLogo,
+            socialLinks: JSON.stringify({
+              facebook: socialFacebook,
+              twitter: socialTwitter,
+              instagram: socialInstagram,
+              youtube: socialYoutube,
+              telegram: socialTelegram,
+            }),
+            themeColors: JSON.stringify(colors),
+          },
+        }),
+      });
       setMessage('Settings saved successfully.');
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : 'Failed to save.');
@@ -142,7 +267,8 @@ export default function SettingsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Site Settings</h1>
-      <form onSubmit={handleSave} className="space-y-8 max-w-2xl">
+      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+      <form onSubmit={handleSave} className="space-y-8">
         {error && <p className="text-red-600 text-sm bg-red-50 px-3 py-2 rounded">{error}</p>}
         {message && <p className="text-green-600 text-sm bg-green-50 px-3 py-2 rounded">{message}</p>}
 
@@ -232,6 +358,30 @@ export default function SettingsPage() {
           {(uploadingHeader || uploadingFooter) ? 'Uploading image…' : saving ? 'Saving…' : 'Save All Settings'}
         </button>
       </form>
+      <aside className="xl:sticky xl:top-6">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Frontend Preview</h2>
+            <p className="text-xs text-gray-500">Updates as you edit; save settings to publish them.</p>
+          </div>
+          {previewReady && <span className="text-xs text-green-700">Live</span>}
+        </div>
+        {previewError ? (
+          <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{previewError}</p>
+        ) : previewUrl ? (
+          <iframe
+            ref={previewFrame}
+            src={previewUrl}
+            title="Live Oorum Uravum frontend preview"
+            className="h-[760px] w-full rounded-lg border border-gray-300 bg-white shadow"
+          />
+        ) : (
+          <div role="status" className="flex h-[760px] items-center justify-center rounded-lg border border-gray-200 bg-white text-sm text-gray-500">
+            Loading preview…
+          </div>
+        )}
+      </aside>
+      </div>
     </div>
   );
 }

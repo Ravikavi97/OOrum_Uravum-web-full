@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSiteSettings } from '@/services/api';
+import { getSiteSettings, parseThemeColors } from '@/services/api';
+import { useSiteSettingsPreview } from '@/contexts/SiteSettingsPreviewContext';
 
 interface ThemeColors {
   primaryDark: string;
@@ -13,25 +14,27 @@ interface ThemeColors {
 
 export default function ThemeProvider({ children, initialColors }: { children: React.ReactNode; initialColors?: ThemeColors | null }) {
   const [colors, setColors] = useState<ThemeColors | null>(initialColors || null);
+  const preview = useSiteSettingsPreview();
 
   useEffect(() => {
     // Fetch latest colors client-side for freshness
     getSiteSettings().then((settings) => {
-      if (settings.themeColors) {
-        try { setColors(JSON.parse(settings.themeColors)); } catch { /* ignore */ }
-      }
+      const savedColors = parseThemeColors(settings.themeColors);
+      if (savedColors) setColors(savedColors);
     }).catch(() => {});
   }, []);
 
+  const activeColors = preview?.themeColors ?? colors;
+
   useEffect(() => {
-    if (!colors) return;
+    if (!activeColors) return;
     const root = document.documentElement;
-    root.style.setProperty('--primary-dark', colors.primaryDark);
-    root.style.setProperty('--accent-red', colors.accentRed);
-    root.style.setProperty('--background', colors.background);
-    root.style.setProperty('--foreground', colors.foreground);
-    root.style.setProperty('--card-bg', colors.cardBg);
-  }, [colors]);
+    root.style.setProperty('--primary-dark', activeColors.primaryDark);
+    root.style.setProperty('--accent-red', activeColors.accentRed);
+    root.style.setProperty('--background', activeColors.background);
+    root.style.setProperty('--foreground', activeColors.foreground);
+    root.style.setProperty('--card-bg', activeColors.cardBg);
+  }, [activeColors]);
 
   return <>{children}</>;
 }

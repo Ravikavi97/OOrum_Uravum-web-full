@@ -71,6 +71,7 @@ A full-stack Tamil news CMS and public-facing website built with Next.js, Expres
 - RESTful API with Express.js
 - Prisma ORM with MariaDB
 - JWT authentication (access token: 15min, refresh token: 7 days)
+- Public account signup with expiring email OTP verification and optional Google sign-in
 - Account lockout after 3 failed login attempts (15 min)
 - Image upload with Sharp processing (thumbnail, medium, large variants)
 - CORS support for multiple origins
@@ -116,7 +117,13 @@ cp frontend/.env.example frontend/.env
 cp publisher-dashboard/.env.example publisher-dashboard/.env
 ```
 
-For local development, the defaults (`http://localhost:4000/api`) work fine.
+For Docker-based Gmail OTP delivery and Google sign-in, copy the root `.env.example` to `.env` and set `SMTP_USER`, `SMTP_PASS`, and `GOOGLE_CLIENT_ID`. Use a Gmail App Password for `SMTP_PASS`; do not use a normal Google account password. The backend verifies Google Identity Services ID tokens using the client ID, so a Google OAuth client secret and redirect URL are not used.
+
+In Google Cloud Console, add the public site URL (for local testing, `http://localhost:3000`) to the OAuth web client's **Authorized JavaScript origins**. The browser sign-in uses Google Identity Services and does not use a redirect flow.
+
+OTP codes expire after 10 minutes, can be resent after 60 seconds, and are limited to five verification attempts. Existing accounts are kept verified during migration. If SMTP is not configured, email/password signup returns a configuration error; Google sign-in remains available when its client ID is configured.
+
+For local development without Docker, provide the same SMTP and Google client ID variables to the backend process. For local Docker Compose, environment variables are read from the repository-root `.env`.
 
 For network access from other devices, update the `.env` files with your machine's IP:
 
@@ -158,9 +165,11 @@ docker compose up -d --build
 
 This starts all 4 services:
 - MariaDB (waits for health check)
-- Backend (runs Prisma migrations on startup)
-- Frontend (serves pre-built Next.js standalone)
-- Publisher Dashboard (serves pre-built Next.js standalone)
+- Backend (runs Prisma migrations on startup and only starts if they succeed)
+- Frontend (waits until the migrated backend passes its health check)
+- Publisher Dashboard (waits until the migrated backend passes its health check)
+
+After building the backend, frontend, and dashboard as above, rebuild and start the Docker services. The backend image includes Prisma migrations and runs `prisma migrate deploy` before serving requests; migration failures stop the backend instead of starting against an outdated database.
 
 ### 5. Seed the admin user
 
@@ -372,11 +381,15 @@ Key models in `prisma/schema.prisma`:
 ### Obituaries
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | /api/obituaries | No | List obituaries (paginated) |
-| GET | /api/obituaries/:id/image | No | Serve obituary image |
-| POST | /api/obituaries | Yes | Create obituary (multipart) |
-| PUT | /api/obituaries/:id | Yes | Update obituary |
+| GET | /api/obituaries | Optional | Public sees approved posts; authenticated Admin/Editor can filter by status |
+| GET | /api/obituaries/slug/:slug | No | Get an approved obituary and its submitted details |
+| GET | /api/obituaries/:id/image | No | Serve an uploaded obituary image |
+| POST | /api/obituaries/submit | No | Submit details and optional `photo` for admin review |
+| POST | /api/obituaries | Yes | Create an obituary (Admin/Editor publish; Author submissions remain pending) |
+| PUT | /api/obituaries/:id | Yes | Edit; only Admin/Editor can approve or reject |
 | DELETE | /api/obituaries/:id | Yes | Delete obituary |
+
+Public submissions and Author-created records stay pending and are hidden from public listings until an Admin or Editor approves them. Uploaded photos are stored in the database; publisher-dashboard image-library selections are stored as their media URL.
 
 ### Advertisements
 | Method | Endpoint | Auth | Description |
@@ -428,6 +441,11 @@ Key models in `prisma/schema.prisma`:
 |----------|-------------|---------|
 | NEXT_PUBLIC_API_URL | Public API URL (baked at build time) | http://localhost:4000/api |
 
+### Docker Compose (.env in repository root)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| FRONTEND_PREVIEW_URL | Browser-accessible frontend origin used by the live settings preview | http://localhost:3000 |
+
 ## Common Operations
 
 ### Rebuild after code changes
@@ -436,6 +454,7 @@ Key models in `prisma/schema.prisma`:
 # Backend changes
 cd backend && npx tsc && cd ..
 docker compose up -d --build backend
+docker compose logs backend --tail 50
 
 # Frontend changes
 cd frontend && npx next build && cd ..
@@ -623,6 +642,10 @@ NEXT_PUBLIC_SITE_URL=https://yourdomain.com
 
 # publisher-dashboard/.env
 NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api
+
+# repository-root .env
+FRONTEND_PREVIEW_URL=https://yourdomain.com
+FRONTEND_PREVIEW_URL=https://yourdomain.com
 
 # docker-compose.yml backend environment
 CORS_ORIGIN: https://yourdomain.com,https://cms.yourdomain.com

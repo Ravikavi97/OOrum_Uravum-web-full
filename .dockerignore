@@ -1,8 +1,14 @@
 node_modules
 .next
 dist
+!backend/dist/
+!backend/dist/**
 .kiro
 .vscode
 *.md
 .git
 .gitignore
+.env
+**/.env
+**/.env.local
+**/.env.production

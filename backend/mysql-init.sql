@@ -28,6 +28,39 @@ CREATE TABLE `users` (
   UNIQUE KEY `users_slug_key`  (`slug`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `frontend_users` (
+  `id` VARCHAR(30) NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
+  `phone` VARCHAR(20) NULL,
+  `address` TEXT NULL,
+  `password_hash` VARCHAR(255) NOT NULL,
+  `avatar_url` VARCHAR(500) NULL,
+  `google_id` VARCHAR(255) NULL,
+  `email_verified` BOOLEAN NOT NULL DEFAULT TRUE,
+  `active` BOOLEAN NOT NULL DEFAULT TRUE,
+  `failed_logins` INT NOT NULL DEFAULT 0,
+  `locked_until` DATETIME(3) NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `frontend_users_email_key` (`email`),
+  UNIQUE KEY `frontend_users_google_id_key` (`google_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `frontend_email_verifications` (
+  `id` VARCHAR(30) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
+  `code_hash` CHAR(64) NOT NULL,
+  `expires_at` DATETIME(3) NOT NULL,
+  `attempts` INT NOT NULL DEFAULT 0,
+  `last_sent_at` DATETIME(3) NOT NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `frontend_email_verifications_email_key` (`email`),
+  KEY `frontend_email_verifications_expires_at_idx` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `categories` (
   `id`          VARCHAR(30)  NOT NULL,
   `name`        VARCHAR(255) NOT NULL,
@@ -127,15 +160,52 @@ CREATE TABLE `ingestion_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `obituaries` (
-  `id`           VARCHAR(30)  NOT NULL,
-  `name`         VARCHAR(500) NOT NULL,
-  `content`      TEXT NOT NULL,
-  `source_url`   VARCHAR(2048) NULL,
-  `image_data`   LONGBLOB NULL,
-  `published_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  `created_at`   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `id`                       VARCHAR(30)   NOT NULL,
+  `name`                     VARCHAR(500)  NOT NULL,
+  `slug`                     VARCHAR(500)  NOT NULL,
+  `content`                  TEXT          NOT NULL,
+  `source_url`               VARCHAR(2048) NULL,
+  `image_data`               LONGBLOB      NULL,
+  `image_mime_type`          VARCHAR(100)  NULL,
+  `image_url`                VARCHAR(2048) NULL,
+  `status`                   VARCHAR(20)   NOT NULL DEFAULT 'PENDING',
+  `submitter_name`           VARCHAR(255)  NULL,
+  `submitter_email`          VARCHAR(255)  NULL,
+  `published_at`             DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `created_at`               DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at`               DATETIME(3)   NOT NULL,
+  `first_name`               VARCHAR(100)  NULL,
+  `middle_name`              VARCHAR(100)  NULL,
+  `surname`                  VARCHAR(100)  NULL,
+  `other_names`              VARCHAR(255)  NULL,
+  `date_of_birth`            DATETIME(3)   NULL,
+  `date_of_death`             DATETIME(3)   NULL,
+  `place_of_birth`           VARCHAR(255)  NULL,
+  `last_residential_address` TEXT          NULL,
+  `father_name`              VARCHAR(150)  NULL,
+  `mother_name`              VARCHAR(150)  NULL,
+  `marital_status`           VARCHAR(50)   NULL,
+  `spouse_name`              VARCHAR(150)  NULL,
+  `brothers_names`           TEXT          NULL,
+  `sisters_names`            TEXT          NULL,
+  `father_in_law_name`       VARCHAR(150)  NULL,
+  `mother_in_law_name`       VARCHAR(150)  NULL,
+  `sons_names`               TEXT          NULL,
+  `daughters_names`          TEXT          NULL,
+  `sons_in_law_names`        TEXT          NULL,
+  `daughters_in_law_names`   TEXT          NULL,
+  `grandchildren_names`      TEXT          NULL,
+  `occupations`              TEXT          NULL,
+  `hobbies_interests`        TEXT          NULL,
+  `community_activities`    TEXT          NULL,
+  `other_details`            TEXT          NULL,
+  `life_story`               TEXT          NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `obituaries_source_url_key` (`source_url`)
+  UNIQUE KEY `obituaries_source_url_key` (`source_url`),
+  UNIQUE KEY `obituaries_slug_key` (`slug`),
+  KEY `obituaries_status_idx` (`status`),
+  KEY `obituaries_date_of_death_idx` (`date_of_death`),
+  KEY `obituaries_first_name_surname_idx` (`first_name`, `surname`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `visitor_sessions` (

@@ -27,6 +27,7 @@ services:
       - "4000:4000"
     environment:
       PORT: 4000
+      OBITUARY_SUBMISSION_RATE_LIMIT: 100
       CORS_ORIGIN: http://localhost:3000,http://localhost:3001,http://172.20.10.7:3000,http://172.20.10.7:3001
       DATABASE_URL: mysql://tamil_user:tamil_pass@mariadb:3306/tamil_news
       JWT_SECRET: docker-jwt-secret-change-in-production
@@ -36,11 +37,24 @@ services:
       FRONTEND_REVALIDATE_URL: http://frontend:3000/api/revalidate
       REVALIDATE_SECRET: revalidate-secret
       IMAGE_ENCRYPTION_KEY: docker-image-encrypt-key-32chars!
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURE: ${SMTP_SECURE:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes:
       - uploads_data:/app/uploads
     depends_on:
       mariadb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   frontend:
     image: node:22-slim
@@ -57,7 +71,8 @@ services:
       - ./frontend/.next/static:/app/.next/static
       - ./frontend/public:/app/public
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   publisher-dashboard:
     image: node:22-slim
@@ -68,12 +83,14 @@ services:
     environment:
       HOSTNAME: "0.0.0.0"
       INTERNAL_API_URL: http://backend:4000/api
+      FRONTEND_PREVIEW_URL: ${FRONTEND_PREVIEW_URL:-http://localhost:3000}
     volumes:
       - ./publisher-dashboard/.next/standalone/publisher-dashboard:/app
       - ./publisher-dashboard/.next/static:/app/.next/static
       - ./publisher-dashboard/public:/app/public
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   mariadb_data:

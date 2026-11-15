@@ -391,7 +391,7 @@ jobs:
 
           if [ "${{ needs.detect-changes.outputs.backend }}" == "true" ]; then
             rsync -az -e "ssh -p $SSH_PORT" \
-              backend/dist/ prisma/ backend/app.js backend/package.json \
+              backend/dist/ backend/app.js backend/package.json \
               "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/backend-staging/"
           fi
 
@@ -409,10 +409,15 @@ jobs:
               publisher-dashboard/public/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/publisher-dashboard/public/"
           fi
 
-          # Always sync docker-compose.yml and prisma schema
+          # Keep deployment files and migration paths intact on the server.
           rsync -az -e "ssh -p $SSH_PORT" \
-            docker-compose.yml prisma/ \
+            docker-compose.yml .dockerignore \
             "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+          rsync -az -e "ssh -p $SSH_PORT" --relative \
+            backend/Dockerfile backend/docker-entrypoint.sh \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+          rsync -az -e "ssh -p $SSH_PORT" \
+            prisma/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/prisma/"
 
       - name: Rebuild and restart changed Docker services
         env:

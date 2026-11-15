@@ -3,14 +3,14 @@
 
 /* ── Theme tokens ──────────────────────────────────────────────────────────── */
 :root {
-  --background: #f4f4f4;
-  --foreground: #1a1a1a;
-  --primary-dark: #0d1b0f;        /* very dark green-black for header/footer  */
-  --accent-red: #259306;          /* site accent = green (from live themeColors) */
-  --link-blue: #1a6e2e;
+  --background: #F5EFE3;
+  --foreground: #171717;
+  --primary-dark: #285430;
+  --accent-red: #259306;
+  --link-blue: var(--primary-dark);
   --card-bg: #ffffff;
-  --nav-bg: #1c3d1f;              /* nav bar background */
-  --section-border: #259306;      /* section heading underline */
+  --nav-bg: var(--primary-dark);
+  --section-border: var(--accent-red);
   --muted: #6b7280;
 }
 

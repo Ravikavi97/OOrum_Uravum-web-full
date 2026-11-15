@@ -14,7 +14,9 @@ RUN npx prisma generate --schema=./prisma/schema.prisma
 
 # Copy pre-built JS output from local build
 COPY backend/dist/ ./dist/
+COPY backend/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN sed -i 's/\r$//' ./docker-entrypoint.sh && chmod +x ./docker-entrypoint.sh
 RUN mkdir -p /app/uploads
 
 EXPOSE 4000
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma || true && node dist/index.js"]
+ENTRYPOINT ["sh", "./docker-entrypoint.sh"]

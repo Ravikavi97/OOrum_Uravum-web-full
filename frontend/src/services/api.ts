@@ -93,8 +93,9 @@ export class ApiRequestError extends Error {
 async function fetchApi<T>(
   path: string,
   options?: RequestInit,
+  baseUrl = BASE_URL,
 ): Promise<T> {
-  const url = `${BASE_URL}${path}`;
+  const url = `${baseUrl}${path}`;
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -169,7 +170,7 @@ export async function getBreakingArticles(): Promise<PaginatedResponse<Article>>
 export async function getCategories(): Promise<Category[]> {
   return fetchApi<Category[]>('/categories', {
     next: { revalidate: 600, tags: ['categories'] },
-  });
+  }, typeof window === 'undefined' ? undefined : '/api');
 }
 
 export interface CategoryLatestArticle {
@@ -236,14 +237,26 @@ export async function getAuthorBySlug(slug: string): Promise<Author> {
 
 // ─── Search endpoint ─────────────────────────────────────────────────────────
 
-export async function searchArticles(
+export interface SearchResult {
+  id: string;
+  type: 'article' | 'obituary' | 'video';
+  title: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  publishedAt: string | null;
+}
+
+export async function searchSiteContent(
   query: string,
   page?: number,
-): Promise<PaginatedResponse<Article>> {
+  signal?: AbortSignal,
+): Promise<PaginatedResponse<SearchResult>> {
   const qs = toQueryString({ q: query, page });
-  return fetchApi<PaginatedResponse<Article>>(`/search${qs}`, {
+  return fetchApi<PaginatedResponse<SearchResult>>(`/search${qs}`, {
     next: { revalidate: 0 },
-  });
+    signal,
+  }, '/api');
 }
 
 // ─── Site settings endpoint ──────────────────────────────────────────────────
@@ -254,8 +267,45 @@ export interface Obituary {
   slug: string;
   content: string;
   sourceUrl: string | null;
+  imageUrl: string | null;
+  imageMimeType: string | null;
+  firstName: string | null;
+  middleName: string | null;
+  surname: string | null;
+  otherNames: string | null;
+  dateOfBirth: string | null;
+  dateOfDeath: string | null;
+  placeOfBirth: string | null;
+  lastResidentialAddress: string | null;
+  fatherName: string | null;
+  motherName: string | null;
+  maritalStatus: string | null;
+  spouseName: string | null;
+  brothersNames: string | null;
+  sistersNames: string | null;
+  fatherInLawName: string | null;
+  motherInLawName: string | null;
+  sonsNames: string | null;
+  daughtersNames: string | null;
+  sonsInLawNames: string | null;
+  daughtersInLawNames: string | null;
+  grandchildrenNames: string | null;
+  occupations: string | null;
+  hobbiesInterests: string | null;
+  communityActivities: string | null;
+  otherDetails: string | null;
+  lifeStory: string | null;
   publishedAt: string;
   createdAt: string;
+}
+
+export function getObituaryImageUrl(
+  obituary: Pick<Obituary, 'id' | 'imageUrl' | 'imageMimeType'>,
+): string | null {
+  if (obituary.imageMimeType) {
+    return `/api/obituaries/${encodeURIComponent(obituary.id)}/image`;
+  }
+  return obituary.imageUrl;
 }
 
 export async function getObituaries(
@@ -271,6 +321,7 @@ export interface SiteSettings {
   siteTitle?: string;
   siteDescription?: string;
   siteTagline?: string;
+  analyticsId?: string;
   socialLinks?: string;
   homeLayout?: string;
   heroConfig?: string;
@@ -370,10 +421,32 @@ export interface ThemeColors {
   cardBg: string;
 }
 
+function isThemeColors(value: unknown): value is ThemeColors {
+  if (typeof value !== 'object' || value === null) return false;
+  const colors = value as Record<string, unknown>;
+  const isHexColor = (color: unknown): color is string => (
+    typeof color === 'string' && /^#[\da-f]{6}$/i.test(color)
+  );
+  return isHexColor(colors.primaryDark)
+    && isHexColor(colors.accentRed)
+    && isHexColor(colors.background)
+    && isHexColor(colors.foreground)
+    && isHexColor(colors.cardBg);
+}
+
+export function parseThemeColors(value: string | undefined): ThemeColors | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isThemeColors(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getThemeColors(): Promise<ThemeColors | null> {
   const settings = await getSiteSettings();
-  if (!settings.themeColors) return null;
-  try { return JSON.parse(settings.themeColors); } catch { return null; }
+  return parseThemeColors(settings.themeColors);
 }
 
 /**

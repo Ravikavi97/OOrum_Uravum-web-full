@@ -1,0 +1,6 @@
+node_modules/
+.env
+.auth/
+playwright-report/
+test-results/
+playwright/.cache/

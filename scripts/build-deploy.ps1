@@ -382,7 +382,9 @@ if ($doFrontend) {
     if (Test-Path $staticSrc) {
         $staticDest = Join-Path (Join-Path $FE_DEST ".next") "static"
         New-Item -ItemType Directory -Path $staticDest -Force | Out-Null
-        Copy-Item $staticSrc $staticDest -Recurse -Force
+        Get-ChildItem $staticSrc -Force | ForEach-Object {
+            Copy-Item $_.FullName $staticDest -Recurse -Force
+        }
         Write-Ok ".next/static copied"
     }
 

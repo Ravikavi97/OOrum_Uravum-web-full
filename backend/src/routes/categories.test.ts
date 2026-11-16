@@ -9,7 +9,7 @@ const mockCategoryFindUnique = vi.fn();
 const mockCategoryCreate = vi.fn();
 const mockCategoryUpdate = vi.fn();
 const mockCategoryDelete = vi.fn();
-const mockArticleFindFirst = vi.fn();
+const mockArticleFindMany = vi.fn();
 
 vi.mock('../lib/prisma', () => ({
   prisma: {
@@ -21,7 +21,7 @@ vi.mock('../lib/prisma', () => ({
       delete: (...args: any[]) => mockCategoryDelete(...args),
     },
     article: {
-      findFirst: (...args: any[]) => mockArticleFindFirst(...args),
+      findMany: (...args: any[]) => mockArticleFindMany(...args),
     },
   },
 }));
@@ -222,13 +222,14 @@ describe('GET /api/categories/with-latest', () => {
     excerpt: 'பற்றிய செய்தி.',
     featuredImage: 'https://example.com/a.jpg',
     publishedAt: now.toISOString(),
+    categoryId: 'cat-1',
   };
 
   it('returns root categories with their latest published article', async () => {
     mockCategoryFindMany.mockResolvedValue([
       { id: 'cat-1', name: 'செய்திகள்', slug: 'seithigal', description: 'News' },
     ]);
-    mockArticleFindFirst.mockResolvedValue(latestArticle);
+    mockArticleFindMany.mockResolvedValue([latestArticle]);
 
     const res = await request(createApp()).get('/api/categories/with-latest');
 
@@ -245,7 +246,7 @@ describe('GET /api/categories/with-latest', () => {
 
   it('filters to root categories and selects only the fields the cards need', async () => {
     mockCategoryFindMany.mockResolvedValue([]);
-    mockArticleFindFirst.mockResolvedValue(null);
+    mockArticleFindMany.mockResolvedValue([]);
 
     await request(createApp()).get('/api/categories/with-latest');
 
@@ -258,7 +259,7 @@ describe('GET /api/categories/with-latest', () => {
 
   it('includes child categories when rootOnly=false', async () => {
     mockCategoryFindMany.mockResolvedValue([]);
-    mockArticleFindFirst.mockResolvedValue(null);
+    mockArticleFindMany.mockResolvedValue([]);
 
     await request(createApp()).get('/api/categories/with-latest?rootOnly=false');
 
@@ -273,12 +274,12 @@ describe('GET /api/categories/with-latest', () => {
     mockCategoryFindMany.mockResolvedValue([
       { id: 'cat-1', name: 'செய்திகள்', slug: 'seithigal', description: null },
     ]);
-    mockArticleFindFirst.mockResolvedValue(latestArticle);
+    mockArticleFindMany.mockResolvedValue([latestArticle]);
 
     await request(createApp()).get('/api/categories/with-latest');
 
-    expect(mockArticleFindFirst).toHaveBeenCalledWith({
-      where: { categoryId: 'cat-1', status: 'PUBLISHED' },
+    expect(mockArticleFindMany).toHaveBeenCalledWith({
+      where: { categoryId: { in: ['cat-1'] }, status: 'PUBLISHED' },
       orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
       select: {
         id: true,
@@ -287,6 +288,7 @@ describe('GET /api/categories/with-latest', () => {
         excerpt: true,
         featuredImage: true,
         publishedAt: true,
+        categoryId: true,
       },
     });
   });
@@ -295,7 +297,7 @@ describe('GET /api/categories/with-latest', () => {
     mockCategoryFindMany.mockResolvedValue([
       { id: 'cat-empty', name: 'தொழில்நுட்பம்', slug: 'thozhilnutpam', description: null },
     ]);
-    mockArticleFindFirst.mockResolvedValue(null);
+    mockArticleFindMany.mockResolvedValue([]);
 
     const res = await request(createApp()).get('/api/categories/with-latest');
 
@@ -305,7 +307,7 @@ describe('GET /api/categories/with-latest', () => {
 
   it('caches the result under both categories and articles tags', async () => {
     mockCategoryFindMany.mockResolvedValue([]);
-    mockArticleFindFirst.mockResolvedValue(null);
+    mockArticleFindMany.mockResolvedValue([]);
 
     await request(createApp()).get('/api/categories/with-latest');
 
@@ -323,12 +325,12 @@ describe('GET /api/categories/with-latest', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(mockCategoryFindMany).not.toHaveBeenCalled();
-    expect(mockArticleFindFirst).not.toHaveBeenCalled();
+    expect(mockArticleFindMany).not.toHaveBeenCalled();
   });
 
   it('uses a separate cache key when rootOnly=false', async () => {
     mockCategoryFindMany.mockResolvedValue([]);
-    mockArticleFindFirst.mockResolvedValue(null);
+    mockArticleFindMany.mockResolvedValue([]);
 
     await request(createApp()).get('/api/categories/with-latest?rootOnly=false');
 
@@ -462,7 +464,7 @@ describe('POST /api/categories', () => {
       .set('x-test-user', editorUser)
       .send(validBody);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['categories']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['categories', 'search']);
   });
 });
 
@@ -555,7 +557,7 @@ describe('DELETE /api/categories/:id', () => {
       .set('Authorization', 'Bearer test-token')
       .set('x-test-user', adminUser);
 
-    expect(mockInvalidateByTags).toHaveBeenCalledWith(['categories', 'category:cat-1']);
+    expect(mockInvalidateByTags).toHaveBeenCalledWith(['categories', 'search', 'category:cat-1']);
   });
 });
 
@@ -797,7 +799,7 @@ describe('category icon fields', () => {
 
   it('includes icon fields in the with-latest payload', async () => {
     mockCategoryFindMany.mockResolvedValue([]);
-    mockArticleFindFirst.mockResolvedValue(null);
+    mockArticleFindMany.mockResolvedValue([]);
 
     await request(createApp()).get('/api/categories/with-latest');
 

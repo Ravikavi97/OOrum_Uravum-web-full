@@ -53,6 +53,7 @@ vi.mock('../lib/auth', () => ({
     }
     next();
   },
+  verifyToken: (token: string) => token === 'admin-token' ? { role: 'ADMIN' } : null,
   AuthenticatedRequest: {},
 }));
 
@@ -135,7 +136,7 @@ describe('GET /api/ads', () => {
 
     const res = await request(createApp())
       .get('/api/ads')
-      .set('Authorization', 'Bearer token')
+      .set('Authorization', 'Bearer admin-token')
       .set('x-test-user', adminUser);
 
     expect(res.status).toBe(200);
@@ -160,7 +161,7 @@ describe('GET /api/ads', () => {
 
     await request(createApp())
       .get('/api/ads?position=banner')
-      .set('Authorization', 'Bearer token')
+      .set('Authorization', 'Bearer admin-token')
       .set('x-test-user', adminUser);
 
     expect(mockAdFindMany).toHaveBeenCalledWith({

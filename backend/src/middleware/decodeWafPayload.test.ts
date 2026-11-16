@@ -36,6 +36,11 @@ describe('decodeWafValue', () => {
     expect(decodeWafValue('b64:')).toBe('b64:');
   });
 
+  it('keeps the original value when base64 is not valid UTF-8', () => {
+    const invalidUtf8 = 'b64:/w==';
+    expect(decodeWafValue(invalidUtf8)).toBe(invalidUtf8);
+  });
+
   it('does not mangle a value that merely starts with b64 but is not encoded', () => {
     const value = 'b64:some-plain-text';
     expect(decodeWafValue(value)).toBe(value);

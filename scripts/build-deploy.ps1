@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     OOrum Uravum - Full Build and Deploy Package Script (Windows PowerShell)
 
@@ -50,6 +50,9 @@ function Write-Warn($msg) {
 function Invoke-Cmd($cmd, $workDir = $ROOT) {
     Push-Location $workDir
     try {
+        if ($env:OS -eq "Windows_NT") {
+            $cmd = $cmd -replace '^npm(?=\s|$)', 'npm.cmd'
+        }
         Invoke-Expression $cmd
         if ($LASTEXITCODE -ne 0) {
             throw "Command failed (exit $LASTEXITCODE): $cmd"
@@ -179,9 +182,17 @@ if ($doBackend) {
     }
 
     # Copy generated Prisma client
-    $destModules    = Join-Path $BE_DEST "node_modules"
-    $prismaClient   = Join-Path (Join-Path $BE_SRC "node_modules") ".prisma"
-    $prismaClientAt = Join-Path (Join-Path $BE_SRC "node_modules") "@prisma"
+    $destModules = Join-Path $BE_DEST "node_modules"
+    $backendModules = Join-Path $BE_SRC "node_modules"
+    $rootModules = Join-Path $ROOT "node_modules"
+    $prismaClient = Join-Path $backendModules ".prisma"
+    if (-not (Test-Path $prismaClient)) {
+        $prismaClient = Join-Path $rootModules ".prisma"
+    }
+    $prismaClientAt = Join-Path $backendModules "@prisma"
+    if (-not (Test-Path $prismaClientAt)) {
+        $prismaClientAt = Join-Path $rootModules "@prisma"
+    }
     if (Test-Path $prismaClient) {
         New-Item -ItemType Directory -Path $destModules -Force | Out-Null
         Copy-Item $prismaClient (Join-Path $destModules ".prisma") -Recurse
@@ -261,7 +272,9 @@ if ($doCms) {
     if (Test-Path $staticSrc) {
         $staticDest = Join-Path (Join-Path $CMS_DEST ".next") "static"
         New-Item -ItemType Directory -Path $staticDest -Force | Out-Null
-        Copy-Item $staticSrc $staticDest -Recurse -Force
+        Get-ChildItem $staticSrc -Force | ForEach-Object {
+            Copy-Item $_.FullName $staticDest -Recurse -Force
+        }
         Write-Ok ".next/static copied"
     }
 

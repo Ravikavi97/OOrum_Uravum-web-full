@@ -10,6 +10,7 @@
  */
 
 const B64_PREFIX = 'b64:';
+const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 /** Field names the dashboard encodes. Mirrors HTML_FIELDS in the dashboard client. */
 export const WAF_ENCODED_FIELDS = ['content', 'excerpt'] as const;
@@ -25,13 +26,13 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 export function decodeWafValue(value: string): string {
   if (!value.startsWith(B64_PREFIX)) return value;
   const payload = value.slice(B64_PREFIX.length);
+  if (!payload || payload.length % 4 !== 0 || !BASE64_PATTERN.test(payload)) return value;
+
   try {
     const decoded = Buffer.from(payload, 'base64');
-    // Check if decoded buffer is non-empty and valid UTF-8
-    if (decoded.length === 0) return value;
+    if (decoded.toString('base64') !== payload) return value;
     const utf8String = decoded.toString('utf8');
-    // Validate that the string can be encoded back to valid UTF-8
-    if (Buffer.from(utf8String, 'utf8').length === 0) return value;
+    if (!Buffer.from(utf8String, 'utf8').equals(decoded)) return value;
     return utf8String;
   } catch {
     return value;

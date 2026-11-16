@@ -16,7 +16,7 @@ describe('cache', () => {
 
   describe('TTL constants', () => {
     it('exports correct TTL values', () => {
-      expect(cache.ARTICLE_TTL).toBe(300);
+      expect(cache.ARTICLE_TTL).toBe(5);
       expect(cache.CATEGORY_TTL).toBe(600);
       expect(cache.TAG_TTL).toBe(600);
       expect(cache.BREAKING_TTL).toBe(60);
@@ -60,12 +60,11 @@ describe('cache', () => {
     it('uses ARTICLE_TTL as default TTL', async () => {
       vi.useFakeTimers();
       await cache.setCached('key', 'value');
-      // Should still be available before 300s
-      vi.advanceTimersByTime(299_000);
+      // The short article TTL remains live just before five seconds.
+      vi.advanceTimersByTime(4_999);
       const result = await cache.getCached('key');
       expect(result).toBe('value');
-      // Should be expired after 300s
-      vi.advanceTimersByTime(2_000);
+      vi.advanceTimersByTime(2);
       const expired = await cache.getCached('key');
       expect(expired).toBeNull();
       vi.useRealTimers();
